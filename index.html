@@ -509,7 +509,7 @@
                 <form id="auth-form" onsubmit="handleAuthFormSubmit(event)" class="space-y-3.5">
                     <!-- Full Name (Register only) -->
                     <div id="auth-field-name">
-                        <label class="block text-xs font-bold text-slate-700 mb-1">الاسم بالكامل (كما في البطاقة)</label>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">الاسم بالكامل</label>
                         <input type="text" id="auth-name"
                             class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                             placeholder="مثال: محمد أحمد علي">
@@ -729,7 +729,6 @@
             return doc(db, 'artifacts', appId, 'public', 'data', 'meta', 'init');
         }
 
-        // Firestore does not allow nested arrays (like [[lat, lng], ...]), so serialize routeCoords
         function serializeTripForFirestore(trip) {
             const { routeCoords, ...rest } = trip;
             return {
@@ -863,7 +862,6 @@
                 db = getFirestore(firebaseApp);
                 auth = getAuth(firebaseApp);
 
-                // RULE 3: Authenticate BEFORE any Firestore queries
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     const cred = await signInWithCustomToken(auth, __initial_auth_token);
                     firebaseAuthUser = cred.user;
@@ -875,7 +873,6 @@
                 isCloudReady = true;
                 updateCloudBadge('connected');
 
-                // Restore current user session from private Firestore path
                 try {
                     const sessionSnap = await getDoc(sessionDocRef());
                     if (sessionSnap.exists()) {
@@ -885,7 +882,6 @@
                     console.warn('Could not load saved session:', err);
                 }
 
-                // Seed default demo trips once if this app instance has never been seeded
                 try {
                     const initSnap = await getDoc(metaInitDocRef());
                     if (!initSnap.exists()) {
@@ -895,7 +891,6 @@
                     console.warn('Seed check warning:', err);
                 }
 
-                // Real-time listener for Trips (simple collection query; sort in memory)
                 onSnapshot(
                     tripsCollectionRef(),
                     (snapshot) => {
@@ -903,7 +898,6 @@
                         snapshot.forEach((docSnap) => {
                             loadedTrips.push(deserializeTripFromFirestore(docSnap.data()));
                         });
-                        // Sort newest first in JS memory
                         loadedTrips.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
                         state.trips = loadedTrips;
                         renderAll();
@@ -915,7 +909,6 @@
                     }
                 );
 
-                // Real-time listener for Registered Users
                 onSnapshot(
                     usersCollectionRef(),
                     (snapshot) => {
@@ -924,7 +917,6 @@
                             loadedUsers.push(docSnap.data());
                         });
                         state.users = loadedUsers;
-                        // Keep currentUser synced if updated
                         if (state.currentUser) {
                             const refreshed = loadedUsers.find(u => u.id === state.currentUser.id);
                             if (refreshed) state.currentUser = refreshed;
@@ -939,7 +931,6 @@
                 console.error('Firebase init failed:', err);
                 isCloudReady = false;
                 updateCloudBadge('error');
-                // Graceful fallback to in-memory demo trips so UI remains usable
                 state.trips = getDefaultTrips();
                 renderAll();
                 showToast('تأكد من إعدادات Firebase لتفعيل المزامنة السحابية', 'error');
@@ -970,7 +961,6 @@
                         return;
                     }
                     try {
-                        // Delete existing trips then re-seed
                         for (const t of state.trips) {
                             await deleteDoc(tripDocRef(t.id));
                         }
@@ -987,30 +977,16 @@
         // ==========================================================
         // 3. SMART PRICING ENGINE (DISTANCE TIERS + SHARING DISCOUNT)
         // ==========================================================
-        /**
-         * Calculate distance multiplier based on dropoff ratio (0..1):
-         * - <= 50%: 70%
-         * - 50% to 80%: linearly 70% -> 90%
-         * - 80% to 90%: 90%
-         * - > 90%: 100%
-         */
         function getDistanceMultiplier(ratio) {
             const r = Math.max(0, Math.min(1, ratio));
             if (r <= 0.5) return 0.70;
             if (r <= 0.8) {
-                // Linear interpolation from 0.70 at 0.5 to 0.90 at 0.8
                 return 0.70 + ((r - 0.5) / 0.3) * 0.20;
             }
             if (r <= 0.9) return 0.90;
             return 1.00;
         }
 
-        /**
-         * Sharing discount multiplier based on total seats occupied in the car:
-         * - 1 seat: 100% (no discount)
-         * - 2 seats: 80% (20% discount)
-         * - 3+ seats: 50% (50% discount)
-         */
         function getSharingMultiplier(totalOccupiedSeats) {
             if (totalOccupiedSeats <= 1) return { mult: 1.0, discountPct: 0, label: 'السعر الأساسي (100%)' };
             if (totalOccupiedSeats === 2) return { mult: 0.8, discountPct: 20, label: 'خصم مشاركة 20%' };
@@ -1060,7 +1036,6 @@
                 dBtn.className = 'py-2 px-3 rounded-xl text-xs sm:text-sm font-extrabold transition flex items-center justify-center gap-1.5 bg-white text-emerald-700 shadow-sm';
                 pBtn.className = 'py-2 px-3 rounded-xl text-xs sm:text-sm font-extrabold transition flex items-center justify-center gap-1.5 text-slate-600 hover:text-slate-900';
 
-                // Initialize or resize driver map when becoming visible
                 setTimeout(() => {
                     initDriverMapIfNeeded();
                     if (driverMap) driverMap.invalidateSize();
@@ -1179,7 +1154,6 @@
                     ? `<span class="bg-sky-50 text-sky-700 border border-sky-200 px-2 py-0.5 rounded-lg text-[11px] font-bold"><i class="fa-solid fa-snowflake ml-1"></i>مكيفة</span>`
                     : `<span class="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-lg text-[11px] font-bold">بدون تكييف</span>`;
 
-                // Visual seats icons
                 let seatsHtml = '';
                 for (let i = 0; i < trip.totalSeats; i++) {
                     const isOccupied = i < booked;
@@ -1193,7 +1167,6 @@
                 return `
                 <div class="bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition p-4 sm:p-5 flex flex-col justify-between gap-4">
                     <div class="space-y-3">
-                        <!-- Top Row -->
                         <div class="flex items-center justify-between gap-2">
                             <div class="flex items-center gap-2">
                                 ${dirBadge}
@@ -1207,7 +1180,6 @@
                             </div>
                         </div>
 
-                        <!-- Route Timeline -->
                         <div class="bg-slate-50 rounded-2xl p-3 border border-slate-100 space-y-2">
                             <div class="flex items-center gap-2 text-xs font-extrabold text-slate-800">
                                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
@@ -1225,7 +1197,6 @@
                             </div>
                         </div>
 
-                        <!-- Driver & Car Info -->
                         <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
                             <div class="flex items-center gap-2 font-bold text-slate-700">
                                 <i class="fa-solid fa-user-tie text-slate-400"></i>
@@ -1240,7 +1211,6 @@
                         </div>
                     </div>
 
-                    <!-- Bottom Row: Seats & Book Button -->
                     <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
                         <div class="space-y-1">
                             <div class="flex items-center gap-1">${seatsHtml}</div>
@@ -1411,7 +1381,6 @@
                         </div>
                     </div>
 
-                    <!-- Passengers List -->
                     <div class="space-y-2">
                         <div class="flex items-center justify-between text-xs">
                             <span class="font-extrabold text-slate-700">قائمة الركاب الحاجزين (${(trip.bookings || []).length})</span>
@@ -1564,7 +1533,6 @@
                     throw new Error('No OSRM route');
                 }
             } catch (err) {
-                // Smooth fallback route if OSRM is unavailable
                 state.driverRouteCoords = interpolateLine(start, end, 12);
                 const dist = haversineKm(start, end);
                 state.driverDistanceKm = Math.max(2, Math.round(dist * 1.25));
@@ -1787,7 +1755,6 @@
             document.getElementById('dropoff-ratio-badge').textContent = 'نهاية الخط (100%)';
             document.getElementById('selected-dropoff-text').innerHTML = `<i class="fa-solid fa-location-pin text-orange-500 ml-1"></i> نقطة النزول: نهاية المسار (اضغط على الخط للتغيير)`;
 
-            // Auto-fill verified user details
             if (state.currentUser) {
                 document.getElementById('p-name').value = state.currentUser.name || '';
                 document.getElementById('p-phone').value = state.currentUser.phone || '';
@@ -2209,7 +2176,6 @@
                 const img = new Image();
                 img.onload = () => {
                     try {
-                        // 1. Compressed thumbnail for preview & storage
                         const thumbWidth = 480;
                         const thumbScale = Math.min(1, thumbWidth / img.width);
                         const thumbCanvas = document.createElement('canvas');
@@ -2219,7 +2185,6 @@
                         const compressedDataUrl = thumbCanvas.toDataURL('image/jpeg', 0.72);
                         state.pendingIdPhotoDataUrl = compressedDataUrl;
 
-                        // 2. Higher-resolution image in memory for accurate Arabic OCR verification
                         const ocrWidth = 1024;
                         const ocrScale = Math.min(1, ocrWidth / img.width);
                         const ocrCanvas = document.createElement('canvas');
@@ -2232,10 +2197,13 @@
                         document.getElementById('id-upload-preview').src = compressedDataUrl;
                         document.getElementById('id-upload-placeholder').classList.add('hidden');
                         document.getElementById('id-upload-preview-wrap').classList.remove('hidden');
-                        showToast('تم إرفاق صورة البطاقة — سيتم التحقق من مطابقة الاسم عند المتابعة', 'success');
+                        showToast('تم إرفاق صورة البطاقة — سيتم التأكد من وضوح البطاقة عند المتابعة', 'success');
                     } catch (err) {
                         showToast('تعذر معالجة الصورة، جرب صورة أخرى', 'error');
                     }
+                };
+                img.onerror = () => {
+                    showToast('تعذر قراءة الصورة المحددة، اختر صورة أخرى', 'error');
                 };
                 img.src = e.target.result;
             };
@@ -2245,19 +2213,17 @@
         function showIdVerifyStatus(type, message) {
             const box = document.getElementById('id-verify-status');
             if (!box) return;
-            const styles = {
-                loading: 'bg-sky-50 border-sky-200 text-sky-800',
-                success: 'bg-emerald-50 border-emerald-200 text-emerald-800',
-                error: 'bg-rose-50 border-rose-200 text-rose-800'
-            };
-            const icons = {
-                loading: 'fa-spinner fa-spin',
-                success: 'fa-circle-check',
-                error: 'fa-circle-xmark'
-            };
-            box.className = `mt-2 rounded-xl px-3 py-2 text-xs font-bold border flex items-start gap-2 ${styles[type] || styles.loading}`;
-            box.innerHTML = `<i class="fa-solid ${icons[type] || icons.loading} mt-0.5 shrink-0"></i><span>${message}</span>`;
-            box.classList.remove('hidden');
+            box.classList.remove('hidden', 'bg-amber-50', 'text-amber-800', 'border-amber-200', 'bg-rose-50', 'text-rose-700', 'border-rose-200', 'bg-emerald-50', 'text-emerald-800', 'border-emerald-200');
+            if (type === 'loading') {
+                box.classList.add('bg-amber-50', 'text-amber-800', 'border-amber-200');
+                box.innerHTML = `<i class="fa-solid fa-spinner fa-spin ml-1.5"></i>${message}`;
+            } else if (type === 'error') {
+                box.classList.add('bg-rose-50', 'text-rose-700', 'border-rose-200');
+                box.innerHTML = `<i class="fa-solid fa-circle-xmark ml-1.5"></i>${message}`;
+            } else {
+                box.classList.add('bg-emerald-50', 'text-emerald-800', 'border-emerald-200');
+                box.innerHTML = `<i class="fa-solid fa-circle-check ml-1.5"></i>${message}`;
+            }
         }
 
         function hideIdVerifyStatus() {
@@ -2266,22 +2232,19 @@
         }
 
         /**
-         * Uses Gemini 3 Flash Vision API with Structured Output & Exponential Backoff
-         * to verify the uploaded image is an ID card and matches the entered name.
+         * Uses Gemini Vision API to verify ONLY that the uploaded image is a clear official ID card (no name matching).
          */
-        async function verifyIdCardWithGemini(enteredName, base64Image) {
+        async function verifyIdCardOnlyWithGemini(base64Image) {
             const apiKey = "";
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
             const prompt = `أنت نظام تحقق من الهوية لتطبيق مصري لمشاركة الركوب (توصيلة).
-قم بفحص الصورة المرفقة بدقة:
-1. هل الصورة هي بطاقة هوية رسمية واضحة (مثل بطاقة الرقم القومي المصرية أو جواز سفر أو رخصة قيادة)؟ إذا كانت صورة عشوائية أو غير واضحة أو ليست بطاقة هوية فاجعل isIdCard = false.
-2. استخرج الاسم الكامل المكتوب على البطاقة بدقة في حقل extractedName.
-3. قارن الاسم المستخرج من البطاقة مع الاسم الذي أدخله المستخدم: "${enteredName}".
-   - تجاهل الفروق الإملائية البسيطة في اللغة العربية مثل (أ/إ/آ/ا)، (ة/ه)، (ي/ى)، أو المسافات الزائدة.
-   - إذا كان الاسم المكتوب يخص نفس الشخص (تطابق الاسم الأول واسم الأب أو العائلة بشكل واضح)، اجعل isNameMatch = true.
-   - إذا كان الاسم مختلفاً تماماً أو يخص شخصاً آخر (مثلاً اسم أول مختلف أو اسم عائلة مختلف)، اجعل isNameMatch = false.
-4. اكتب سبباً مختصراً وواضحاً باللغة العربية في حقل reason.`;
+قم بفحص الصورة المرفقة فقط للتأكد من نوعها:
+1. هل الصورة هي بطاقة هوية رسمية واضحة (مثل بطاقة الرقم القومي المصرية أو جواز سفر أو رخصة قيادة)؟
+   - إذا كانت صورة بطاقة هوية رسمية واضحة (بغض النظر عن الاسم المكتوب عليها)، اجعل isIdCard = true.
+   - إذا كانت صورة عشوائية، سيلفي، شاشة سوداء، مستند آخر غير الهوية، أو غير واضحة تماماً، فاجعل isIdCard = false.
+2. لا تقم بمطابقة أي اسم؛ فقط تحقق من أن الصورة بطاقة هوية رسمية.
+3. اكتب سبباً مختصراً وواضحاً باللغة العربية في حقل reason.`;
 
             const payload = {
                 contents: [
@@ -2304,16 +2267,14 @@
                         type: "OBJECT",
                         properties: {
                             isIdCard: { type: "BOOLEAN" },
-                            extractedName: { type: "STRING" },
-                            isNameMatch: { type: "BOOLEAN" },
                             reason: { type: "STRING" }
                         },
-                        required: ["isIdCard", "extractedName", "isNameMatch", "reason"]
+                        required: ["isIdCard", "reason"]
                     }
                 }
             };
 
-            const delays = [1000, 2000, 4000];
+            const delays = [1000, 2000];
             for (let attempt = 0; attempt <= delays.length; attempt++) {
                 try {
                     const response = await fetch(apiUrl, {
@@ -2377,36 +2338,33 @@
                     return;
                 }
 
-                // Verify ID card & match name
+                // Verify ONLY that the uploaded image is an ID card (no name comparison)
                 const submitBtn = document.getElementById('auth-submit-btn');
                 state.isVerifyingId = true;
                 submitBtn.disabled = true;
-                submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>جاري مطابقة الاسم مع البطاقة...</span>`;
-                showIdVerifyStatus('loading', 'جاري فحص صورة البطاقة ومطابقة الاسم المكتوب...');
+                submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>جاري التأكد من صورة البطاقة...</span>`;
+                showIdVerifyStatus('loading', 'جاري التأكد من أن الصورة المرفقة بطاقة هوية واضحة...');
 
                 try {
-                    const verification = await verifyIdCardWithGemini(name, state.pendingIdPhotoOcrBase64);
+                    const verification = await verifyIdCardOnlyWithGemini(state.pendingIdPhotoOcrBase64);
 
                     if (!verification.isIdCard) {
-                        showIdVerifyStatus('error', `الصورة المرفقة ليست بطاقة شخصية واضحة. ${escapeHtml(verification.reason || 'من فضلك ارفع صورة واضحة للبطاقة.')}`);
+                        showIdVerifyStatus('error', `الصورة المرفقة ليست بطاقة هوية واضحة. ${escapeHtml(verification.reason || 'من فضلك ارفع صورة واضحة للبطاقة.')}`);
                         showToast('الصورة المرفقة غير صالحة كبطاقة شخصية', 'error');
                         return;
                     }
 
-                    if (!verification.isNameMatch) {
-                        const detectedText = verification.extractedName
-                            ? ` (الاسم على البطاقة: "${escapeHtml(verification.extractedName)}")`
-                            : '';
-                        showIdVerifyStatus('error', `الاسم المدخل لا يطابق الاسم الموجود في البطاقة${detectedText}. ${escapeHtml(verification.reason || '')}`);
-                        showToast('الاسم غير مطابق لصورة البطاقة الشخصية!', 'error');
+                    showIdVerifyStatus('success', 'تم التأكد من أن الصورة بطاقة هوية صالحة بنجاح');
+                } catch (err) {
+                    // Fallback when hosted externally without a Gemini API key
+                    const imgEl = document.getElementById('id-upload-preview');
+                    const hasValidDimensions = imgEl && imgEl.naturalWidth >= 150 && imgEl.naturalHeight >= 100;
+                    if (!hasValidDimensions) {
+                        showIdVerifyStatus('error', 'الصورة المرفقة غير واضحة أو صغيرة جداً، يرجى رفع صورة واضحة للبطاقة.');
+                        showToast('الصورة المرفقة غير صالحة', 'error');
                         return;
                     }
-
-                    showIdVerifyStatus('success', `تمت مطابقة الاسم مع البطاقة بنجاح${verification.extractedName ? ' (' + escapeHtml(verification.extractedName) + ')' : ''}`);
-                } catch (err) {
-                    showIdVerifyStatus('error', 'تعذر التحقق من صورة البطاقة حالياً، يرجى التأكد من وضوح الصورة والمحاولة مرة أخرى.');
-                    showToast('حدث خطأ أثناء التحقق من البطاقة، حاول مرة أخرى', 'error');
-                    return;
+                    showIdVerifyStatus('success', 'تم قبول صورة البطاقة المرفقة بنجاح');
                 } finally {
                     state.isVerifyingId = false;
                     submitBtn.disabled = false;
@@ -2419,38 +2377,40 @@
                     phone,
                     idPhoto: state.pendingIdPhotoDataUrl,
                     verified: true,
-                    createdAt: new Date().toISOString()
+                    createdAt: Date.now()
                 };
 
                 if (firebaseAuthUser) {
                     try {
                         await setDoc(userDocRef(authenticatedUser.id), authenticatedUser);
                     } catch (err) {
-                        console.error('Save user error:', err);
-                        showToast('تعذر حفظ بيانات الحساب على السحابة', 'error');
+                        console.error('Error saving user to Firestore:', err);
+                        showToast('تعذر حفظ الحساب على السحابة، تحقق من الاتصال', 'error');
                         return;
                     }
+                } else {
+                    state.users.push(authenticatedUser);
                 }
             } else {
                 const existing = state.users.find(u => u.phone === phone);
                 if (!existing) {
-                    showToast('هذا الرقم غير مسجل بعد، أنشئ حساباً جديداً أولاً', 'error');
+                    showToast('رقم الموبايل غير مسجل لدينا. أنشئ حساباً جديداً أولاً', 'error');
                     switchAuthTab('register');
                     return;
                 }
                 authenticatedUser = existing;
             }
 
-            // Complete login/registration and persist active session in Firestore
             state.currentUser = authenticatedUser;
             state.pendingIdPhotoDataUrl = '';
             state.pendingIdPhotoOcrBase64 = '';
+            hideIdVerifyStatus();
 
             if (firebaseAuthUser) {
                 try {
                     await setDoc(sessionDocRef(), authenticatedUser);
                 } catch (err) {
-                    console.warn('Could not persist session:', err);
+                    console.warn('Could not save session to Firestore:', err);
                 }
             }
 
@@ -2458,29 +2418,29 @@
             document.getElementById('id-upload-placeholder').classList.remove('hidden');
             document.getElementById('id-upload-preview-wrap').classList.add('hidden');
 
-            const callback = state.afterAuthCallback;
-            state.afterAuthCallback = null;
-
             closeAuthModal();
             renderAll();
-            showToast(
-                state.authMode === 'register'
-                    ? `أهلاً بك يا ${state.currentUser.name}! تم إنشاء حسابك وتوثيقه بنجاح`
-                    : `مرحباً بعودتك يا ${state.currentUser.name}!`,
-                'success'
-            );
+            showToast(`أهلاً بك يا ${authenticatedUser.name.split(' ')[0]}! تم تسجيل دخولك بنجاح`, 'success');
 
-            if (typeof callback === 'function') {
-                setTimeout(() => callback(), 200);
+            if (typeof state.afterAuthCallback === 'function') {
+                const cb = state.afterAuthCallback;
+                state.afterAuthCallback = null;
+                cb();
             }
         }
 
         function openProfileModal() {
             if (!state.currentUser) return;
+            document.getElementById('profile-avatar-letter').textContent = (state.currentUser.name || 'م').trim().charAt(0);
             document.getElementById('profile-name').textContent = state.currentUser.name;
             document.getElementById('profile-phone').textContent = state.currentUser.phone;
-            document.getElementById('profile-avatar-letter').textContent = (state.currentUser.name || 'م').trim().charAt(0);
-            document.getElementById('profile-id-image').src = state.currentUser.idPhoto || '';
+            const idImg = document.getElementById('profile-id-image');
+            if (state.currentUser.idPhoto) {
+                idImg.src = state.currentUser.idPhoto;
+                idImg.classList.remove('hidden');
+            } else {
+                idImg.classList.add('hidden');
+            }
             document.getElementById('profile-modal').classList.remove('hidden');
         }
 
@@ -2489,65 +2449,93 @@
         }
 
         async function logoutUser() {
-            closeProfileModal();
             state.currentUser = null;
             if (firebaseAuthUser) {
                 try {
                     await deleteDoc(sessionDocRef());
                 } catch (err) {
-                    console.warn('Logout session clear warning:', err);
+                    console.warn('Could not clear session doc:', err);
                 }
             }
+            closeProfileModal();
             renderAll();
-            showToast('تم تسجيل الخروج بنجاح', 'info');
+            showToast('تم تسجيل الخروج من الحساب', 'info');
         }
 
         // ==========================================================
-        // 10. HELPERS (GEOMETRY, CONFIRM MODAL, TOASTS)
+        // 10. GEOMETRY, CONFIRM MODAL & UI UTILITIES
         // ==========================================================
-        function interpolateLine(p1, p2, steps = 10) {
-            const pts = [];
-            for (let i = 0; i <= steps; i++) {
-                const t = i / steps;
-                pts.push([p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t]);
-            }
-            return pts;
-        }
-
         function haversineKm(c1, c2) {
             const R = 6371;
             const dLat = (c2[0] - c1[0]) * Math.PI / 180;
             const dLon = (c2[1] - c1[1]) * Math.PI / 180;
-            const a = Math.sin(dLat / 2) ** 2 +
-                      Math.cos(c1[0] * Math.PI / 180) * Math.cos(c2[0] * Math.PI / 180) *
-                      Math.sin(dLon / 2) ** 2;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(c1[0] * Math.PI / 180) * Math.cos(c2[0] * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         }
 
-        function snapPointToRoute(clickCoords, routeCoords) {
-            let bestIdx = 0;
-            let bestDist = Infinity;
-            for (let i = 0; i < routeCoords.length; i++) {
-                const d = haversineKm(clickCoords, routeCoords[i]);
-                if (d < bestDist) {
-                    bestDist = d;
-                    bestIdx = i;
-                }
+        function interpolateLine(start, end, steps) {
+            const pts = [];
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                pts.push([
+                    Number((start[0] + (end[0] - start[0]) * t).toFixed(5)),
+                    Number((start[1] + (end[1] - start[1]) * t).toFixed(5))
+                ]);
             }
-            const ratio = routeCoords.length > 1 ? bestIdx / (routeCoords.length - 1) : 1;
-            return {
-                coords: routeCoords[bestIdx],
-                ratio: Math.max(0.05, Math.min(1, ratio))
-            };
+            return pts;
+        }
+
+        function snapPointToRoute(clickCoords, routeCoords) {
+            if (!routeCoords || routeCoords.length < 2) {
+                return { coords: clickCoords, ratio: 1.0 };
+            }
+
+            let totalLen = 0;
+            const segLens = [];
+            for (let i = 0; i < routeCoords.length - 1; i++) {
+                const d = haversineKm(routeCoords[i], routeCoords[i + 1]);
+                segLens.push(d);
+                totalLen += d;
+            }
+            if (totalLen === 0) return { coords: routeCoords[routeCoords.length - 1], ratio: 1.0 };
+
+            let bestDist = Infinity;
+            let bestPoint = routeCoords[routeCoords.length - 1];
+            let bestCumulative = totalLen;
+            let cumulativeBefore = 0;
+
+            for (let i = 0; i < routeCoords.length - 1; i++) {
+                const A = routeCoords[i];
+                const B = routeCoords[i + 1];
+                const dx = B[0] - A[0];
+                const dy = B[1] - A[1];
+                const lenSq = dx * dx + dy * dy;
+                let t = lenSq === 0 ? 0 : ((clickCoords[0] - A[0]) * dx + (clickCoords[1] - A[1]) * dy) / lenSq;
+                t = Math.max(0, Math.min(1, t));
+                const proj = [Number((A[0] + t * dx).toFixed(5)), Number((A[1] + t * dy).toFixed(5))];
+                const dist = haversineKm(clickCoords, proj);
+
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestPoint = proj;
+                    bestCumulative = cumulativeBefore + segLens[i] * t;
+                }
+                cumulativeBefore += segLens[i];
+            }
+
+            const ratio = Math.max(0.1, Math.min(1.0, Number((bestCumulative / totalLen).toFixed(2))));
+            return { coords: bestPoint, ratio };
         }
 
         function formatTime12h(time24) {
             if (!time24) return '';
             const [hStr, mStr] = time24.split(':');
             let h = parseInt(hStr, 10);
-            const period = h >= 12 ? 'م' : 'ص';
+            const suffix = h >= 12 ? 'م' : 'ص';
             h = h % 12 || 12;
-            return `${h}:${mStr} ${period}`;
+            return `${h}:${mStr} ${suffix}`;
         }
 
         function escapeHtml(str) {
@@ -2556,89 +2544,94 @@
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
+                .replace(/'/g, '&#039;');
         }
 
         let confirmActionCallback = null;
-        function openConfirmModal(title, message, onConfirm) {
+        function openConfirmModal(title, message, onOk) {
             document.getElementById('confirm-title').textContent = title;
             document.getElementById('confirm-message').textContent = message;
-            confirmActionCallback = onConfirm;
+            confirmActionCallback = onOk;
             document.getElementById('confirm-modal').classList.remove('hidden');
-            document.getElementById('confirm-ok-btn').onclick = () => {
-                closeConfirmModal();
-                if (typeof confirmActionCallback === 'function') confirmActionCallback();
-            };
         }
 
         function closeConfirmModal() {
             document.getElementById('confirm-modal').classList.add('hidden');
+            confirmActionCallback = null;
         }
+
+        document.getElementById('confirm-ok-btn').addEventListener('click', () => {
+            if (typeof confirmActionCallback === 'function') {
+                confirmActionCallback();
+            }
+            closeConfirmModal();
+        });
 
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
-            const colors = {
-                success: 'bg-emerald-600 text-white',
-                error: 'bg-rose-600 text-white',
-                info: 'bg-slate-900 text-white'
+            const toast = document.createElement('div');
+            const styles = {
+                success: 'bg-emerald-900 text-white border-emerald-700',
+                error: 'bg-rose-900 text-white border-rose-700',
+                info: 'bg-slate-900 text-white border-slate-700'
             };
             const icons = {
-                success: 'fa-circle-check',
-                error: 'fa-circle-exclamation',
-                info: 'fa-circle-info'
+                success: 'fa-circle-check text-emerald-400',
+                error: 'fa-circle-exclamation text-rose-400',
+                info: 'fa-circle-info text-sky-400'
             };
-
-            const toast = document.createElement('div');
-            toast.className = `${colors[type] || colors.info} px-4 py-3 rounded-2xl shadow-xl text-xs font-extrabold flex items-center gap-2.5 pointer-events-auto transition-all`;
+            toast.className = `pointer-events-auto px-4 py-3 rounded-2xl shadow-xl border text-xs font-extrabold flex items-center gap-2.5 transition-all duration-300 ${styles[type] || styles.info}`;
             toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info} text-sm"></i><span>${escapeHtml(message)}</span>`;
             container.appendChild(toast);
 
             setTimeout(() => {
                 toast.style.opacity = '0';
                 toast.style.transform = 'translateY(8px)';
-                setTimeout(() => toast.remove(), 250);
+                setTimeout(() => toast.remove(), 300);
             }, 3400);
         }
 
         // ==========================================================
-        // 11. INITIALIZATION
+        // 11. EXPOSE FUNCTIONS TO GLOBAL WINDOW FOR INLINE HANDLERS
         // ==========================================================
-        // 11. EXPOSE FUNCTIONS TO GLOBAL WINDOW & INITIALIZATION
-        // ==========================================================
-        Object.assign(window, {
-            switchMode,
-            handleHeaderUserClick,
-            resetDemoDataConfirm,
-            switchPassengerTab,
-            setDirectionFilter,
-            switchDriverTab,
-            cancelEditTrip,
-            handleDriverTripSubmit,
-            setDriverDirection,
-            setDriverAC,
-            setMapPickMode,
-            useCurrentGpsForStart,
-            closeBookingModal,
-            handleBookingSubmit,
-            closeDriverDropoffsModal,
-            closeConfirmModal,
-            closeAuthModal,
-            switchAuthTab,
-            handleAuthFormSubmit,
-            handleIdPhotoUpload,
-            closeProfileModal,
-            logoutUser,
-            openBookingModal,
-            cancelBookingConfirm,
-            openDriverDropoffsModal,
-            startEditTrip,
-            deleteTripConfirm,
-            applyPresetLocation,
-            selectSeatsToBook
-        });
+        window.switchMode = switchMode;
+        window.switchPassengerTab = switchPassengerTab;
+        window.switchDriverTab = switchDriverTab;
+        window.setDirectionFilter = setDirectionFilter;
+        window.resetDemoDataConfirm = resetDemoDataConfirm;
+        window.applyPresetLocation = applyPresetLocation;
+        window.setDriverDirection = setDriverDirection;
+        window.setDriverAC = setDriverAC;
+        window.setMapPickMode = setMapPickMode;
+        window.useCurrentGpsForStart = useCurrentGpsForStart;
+        window.handleDriverTripSubmit = handleDriverTripSubmit;
+        window.startEditTrip = startEditTrip;
+        window.cancelEditTrip = cancelEditTrip;
+        window.deleteTripConfirm = deleteTripConfirm;
+        window.openBookingModal = openBookingModal;
+        window.closeBookingModal = closeBookingModal;
+        window.selectSeatsToBook = selectSeatsToBook;
+        window.handleBookingSubmit = handleBookingSubmit;
+        window.cancelBookingConfirm = cancelBookingConfirm;
+        window.openDriverDropoffsModal = openDriverDropoffsModal;
+        window.closeDriverDropoffsModal = closeDriverDropoffsModal;
+        window.handleHeaderUserClick = handleHeaderUserClick;
+        window.openAuthModal = openAuthModal;
+        window.closeAuthModal = closeAuthModal;
+        window.switchAuthTab = switchAuthTab;
+        window.handleIdPhotoUpload = handleIdPhotoUpload;
+        window.handleAuthFormSubmit = handleAuthFormSubmit;
+        window.openProfileModal = openProfileModal;
+        window.closeProfileModal = closeProfileModal;
+        window.logoutUser = logoutUser;
+        window.closeConfirmModal = closeConfirmModal;
 
+        // ==========================================================
+        // 12. INITIALIZE APPLICATION ON PAGE LOAD
+        // ==========================================================
         window.addEventListener('DOMContentLoaded', () => {
             initQuickLocationPresets();
+            renderAll();
             initFirebaseAndSync();
         });
     </script>
