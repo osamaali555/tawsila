@@ -1581,6 +1581,22 @@
             if (!navigator.geolocation) {
                 showToast('المتصفح لا يدعم تحديد الموقع (GPS)', 'error');
                 return;
+            }
+            showToast('جاري تحديد موقعك الحالي...', 'info');
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    state.driverStartCoords = [Number(pos.coords.latitude.toFixed(5)), Number(pos.coords.longitude.toFixed(5))];
+                    document.getElementById('d-start-name').value = 'موقعي الحالي (GPS)';
+                    updateDriverMapRoute();
+                    showToast('تم تحديد موقعك كنقطة بداية', 'success');
+                },
+                () => {
+                    showToast('تعذر الوصول للموقع، تأكد من تفعيل الـ GPS', 'error');
+                },
+                { enableHighAccuracy: true, timeout: 8000 }
+            );
+        }
+
         async function handleDriverTripSubmit(e) {
             e.preventDefault();
 
