@@ -2376,19 +2376,19 @@
         }
 
         /**
-         * Uses Gemini Vision API when a valid browser API key (AIzaSy...) is configured,
-         * and gracefully falls back to flexible local ID card check if the API is unreachable.
+         * Uses Gemini Vision API strictly to verify that the uploaded image is a real ID card.
+         * Rejects portraits/selfies or non-ID images, and blocks registration if verification fails.
          */
         async function verifyIdCardOnlyWithGemini(base64Image) {
             const apiKey = "AIzaSyApO-7UTu3esaHI-NTqcJIM7XCYAcDMdf4";
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
-            const prompt = `أنت نظام تحقق من الهوية لتطبيق مصري لمشاركة الركوب (توصيلة).
+            const prompt = `أنت نظام تحقق صارم من الهوية لتطبيق مصري لمشاركة الركوب (توصيلة).
 قم بفحص الصورة المرفقة بدقة للتأكد من نوعها:
-1. هل الصورة هي بطاقة هوية رسمية واضحة (مثل بطاقة الرقم القومي المصرية أو جواز سفر أو رخصة قيادة)؟
-   - إذا كانت صورة بطاقة هوية رسمية (بغض النظر عن الاسم المكتوب عليها أو زاوية التصوير)، اجعل isIdCard = true.
-   - إذا كانت صورة شخصية (بورتريه/سيلفي فقط)، صورة عشوائية، شاشة سوداء، أو مستند آخر غير الهوية، فاجعل isIdCard = false.
-2. لا تقم بمطابقة أي اسم؛ فقط تحقق من أن الصورة بطاقة هوية رسمية.
+1. هل الصورة هي بطاقة هوية رسمية حقيقية وواضحة (مثل بطاقة الرقم القومي المصرية أو جواز سفر أو رخصة قيادة)؟
+   - إذا كانت صورة بطاقة هوية رسمية حقيقية، اجعل isIdCard = true.
+   - إذا كانت صورة شخصية (بورتريه/سيلفي لشخص)، أو صورة عادية في مكان عام أو مسبح، أو شاشة سوداء، أو مستند آخر غير الهوية، فاجعل isIdCard = false فوراً.
+2. لا تقم بمطابقة أي اسم؛ فقط تحقق من أن الصورة بطاقة هوية رسمية حقيقية وليست صورة شخص.
 3. اكتب سبباً مختصراً وواضحاً باللغة العربية في حقل reason.`;
 
             const payload = {
@@ -2426,12 +2426,17 @@
             });
 
             if (!response.ok) {
-                throw new Error('HTTP ' + response.status);
+                let errDetail = 'HTTP ' + response.status;
+                try {
+                    const errJson = await response.json();
+                    if (errJson?.error?.message) errDetail = errJson.error.message;
+                } catch (_) {}
+                throw new Error(errDetail);
             }
 
             const result = await response.json();
             const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!jsonText) throw new Error('Empty AI response');
+            if (!jsonText) throw new Error('استجابة فارغة من خادم التحقق');
 
             return JSON.parse(jsonText);
         }
@@ -2468,43 +2473,28 @@
                     return;
                 }
 
-                // Verify ONLY that the uploaded image is an ID card (no name comparison)
+                // Strictly verify that the uploaded image is an ID card via Gemini Vision
                 const submitBtn = document.getElementById('auth-submit-btn');
                 state.isVerifyingId = true;
                 submitBtn.disabled = true;
-                submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>جاري التأكد من صورة البطاقة...</span>`;
-                showIdVerifyStatus('loading', 'جاري التأكد من صورة البطاقة المرفقة...');
+                submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>جاري فحص صورة البطاقة بالذكاء الاصطناعي...</span>`;
+                showIdVerifyStatus('loading', 'جاري فحص صورة البطاقة للتأكد من صحتها...');
 
                 try {
                     const verification = await verifyIdCardOnlyWithGemini(state.pendingIdPhotoOcrBase64);
 
                     if (!verification.isIdCard) {
-                        showIdVerifyStatus('error', `الصورة المرفقة ليست بطاقة هوية واضحة. ${escapeHtml(verification.reason || 'من فضلك ارفع صورة واضحة للبطاقة.')}`);
-                        showToast('الصورة المرفقة غير صالحة كبطاقة شخصية', 'error');
+                        showIdVerifyStatus('error', `الصورة المرفقة ليست بطاقة شخصية. ${escapeHtml(verification.reason || 'يرجى رفع صورة واضحة للبطاقة الشخصية.')}`);
+                        showToast('تم رفض الصورة: ليست بطاقة شخصية', 'error');
                         return;
                     }
 
                     showIdVerifyStatus('success', 'تم التأكد من أن الصورة بطاقة هوية صالحة بنجاح');
                 } catch (err) {
-                    // Flexible local fallback when API is unreachable:
-                    // Accepts standard ID photos (landscape, square-ish, or slightly angled) and rejects tall portrait selfies
-                    const w = state.pendingIdWidth || 600;
-                    const h = state.pendingIdHeight || 400;
-                    const isVeryTallPortrait = h > w * 1.38;
-
-                    if (w < 150 || h < 120) {
-                        showIdVerifyStatus('error', 'الصورة صغيرة جداً وغير واضحة. يرجى رفع صورة أوضح للبطاقة.');
-                        showToast('يرجى رفع صورة أوضح للبطاقة الشخصية', 'error');
-                        return;
-                    }
-
-                    if (isVeryTallPortrait) {
-                        showIdVerifyStatus('error', 'هذه صورة طولية (بورتريه). يرجى تصوير البطاقة الشخصية بالعرض.');
-                        showToast('يرجى تصوير البطاقة الشخصية بالعرض', 'error');
-                        return;
-                    }
-
-                    showIdVerifyStatus('success', 'تم قبول صورة البطاقة المرفقة بنجاح');
+                    console.error('ID Verification Error:', err);
+                    showIdVerifyStatus('error', `تعذر التحقق من صورة البطاقة حالياً (${escapeHtml(err.message)}). تأكد من الاتصال بالإنترنت وحاول مرة أخرى.`);
+                    showToast('فشل التحقق من البطاقة، لم يتم إنشاء الحساب', 'error');
+                    return;
                 } finally {
                     state.isVerifyingId = false;
                     submitBtn.disabled = false;
