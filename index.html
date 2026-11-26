@@ -107,6 +107,14 @@
                     <span class="hidden sm:inline">دخول / حساب جديد</span>
                 </button>
 
+                <!-- Admin Users Database Button -->
+                <button onclick="openUsersDatabaseModal()" title="قاعدة بيانات المستخدمين والبطاقات"
+                    class="shrink-0 px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-extrabold transition flex items-center gap-1.5 shadow-sm">
+                    <i class="fa-solid fa-users-viewfinder text-emerald-400"></i>
+                    <span class="hidden md:inline">المستخدمين</span>
+                    <span id="badge-total-users" class="bg-emerald-500 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full">0</span>
+                </button>
+
                 <button onclick="resetDemoDataConfirm()" title="إعادة ضبط البيانات التجريبية"
                     class="hidden sm:flex items-center justify-center w-9 h-9 text-slate-400 hover:text-emerald-600 rounded-xl hover:bg-slate-100 transition">
                     <i class="fa-solid fa-rotate-right"></i>
@@ -507,6 +515,25 @@
                 </div>
 
                 <form id="auth-form" onsubmit="handleAuthFormSubmit(event)" class="space-y-3.5">
+                    <!-- Role Selector (Register only) -->
+                    <div id="auth-field-role">
+                        <label class="block text-xs font-bold text-slate-700 mb-1.5">نوع الحساب</label>
+                        <div class="grid grid-cols-3 gap-1.5 bg-slate-100 p-1 rounded-xl">
+                            <button type="button" id="role-btn-passenger" onclick="setAuthRole('passenger')"
+                                class="py-2 rounded-lg text-xs font-extrabold bg-white text-emerald-700 shadow-sm transition">
+                                <i class="fa-solid fa-user ml-1"></i>راكب
+                            </button>
+                            <button type="button" id="role-btn-driver" onclick="setAuthRole('driver')"
+                                class="py-2 rounded-lg text-xs font-extrabold text-slate-600 hover:text-slate-900 transition">
+                                <i class="fa-solid fa-car ml-1"></i>سائق
+                            </button>
+                            <button type="button" id="role-btn-both" onclick="setAuthRole('both')"
+                                class="py-2 rounded-lg text-xs font-extrabold text-slate-600 hover:text-slate-900 transition">
+                                <i class="fa-solid fa-arrows-left-right ml-1"></i>كلاهما
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Full Name (Register only) -->
                     <div id="auth-field-name">
                         <label class="block text-xs font-bold text-slate-700 mb-1">الاسم بالكامل</label>
@@ -536,7 +563,7 @@
                                 <div class="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center text-lg">
                                     <i class="fa-solid fa-id-card"></i>
                                 </div>
-                                <p class="text-xs font-extrabold text-slate-700">اضغط لرفع أو تصوير البطاقة الشخصية</p>
+                                <p class="text-xs font-extrabold text-slate-700">اضغط لرفع صورة من الهاتف أو التصوير بالكاميرا</p>
                                 <p class="text-[10px] font-semibold text-slate-400">JPG, PNG — بياناتك مشفرة وآمنة لتوثيق الحساب فقط</p>
                             </div>
                             <div id="id-upload-preview-wrap" class="hidden space-y-2">
@@ -546,7 +573,7 @@
                                 </span>
                             </div>
                         </label>
-                        <input type="file" id="auth-id-input" accept="image/*" capture="environment" class="hidden" onchange="handleIdPhotoUpload(event)">
+                        <input type="file" id="auth-id-input" accept="image/*" class="hidden" onchange="handleIdPhotoUpload(event)">
                         <!-- AI ID Verification Status Box -->
                         <div id="id-verify-status" class="hidden mt-2 rounded-xl px-3 py-2 text-xs font-bold border"></div>
                     </div>
@@ -597,6 +624,88 @@
                     <i class="fa-solid fa-right-from-bracket"></i>
                     تسجيل الخروج
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== ADMIN USERS DATABASE MODAL ==================== -->
+    <div id="users-db-modal" class="fixed inset-0 z-[58] hidden bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col">
+            <!-- Header -->
+            <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white shrink-0">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center font-black">
+                        <i class="fa-solid fa-database"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-black">قاعدة بيانات المستخدمين المسجلين</h3>
+                        <p class="text-[11px] text-slate-300 font-semibold">سجل كامل بالأسماء وأرقام الهواتف وصور البطاقات الشخصية</p>
+                    </div>
+                </div>
+                <button onclick="closeUsersDatabaseModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Admin PIN Lock Screen -->
+            <div id="users-db-lock-screen" class="p-6 sm:p-8 text-center max-w-sm mx-auto space-y-4">
+                <div class="w-14 h-14 rounded-2xl bg-slate-100 text-slate-800 mx-auto flex items-center justify-center text-2xl border border-slate-200">
+                    <i class="fa-solid fa-lock"></i>
+                </div>
+                <div class="space-y-1">
+                    <h4 class="text-base font-black text-slate-900">منطقة الإدارة المحمية</h4>
+                    <p class="text-xs font-semibold text-slate-500">أدخل رمز مرور الإدارة لعرض بيانات وصور بطاقات المستخدمين</p>
+                </div>
+                <form onsubmit="unlockUsersDatabase(event)" class="space-y-3">
+                    <input type="password" id="admin-pin-input" inputmode="numeric" maxlength="8" required placeholder="أدخل رمز الإدارة (الافتراضي: 1234)"
+                        class="w-full px-4 py-3 rounded-2xl border border-slate-300 text-center text-base font-black tracking-widest focus:outline-none focus:border-emerald-500">
+                    <button type="submit"
+                        class="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition">
+                        فتح قاعدة البيانات
+                    </button>
+                </form>
+            </div>
+
+            <!-- Unlocked Users List Content -->
+            <div id="users-db-content" class="hidden p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
+                <!-- Stats & Filters -->
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-magnifying-glass absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="users-db-search" oninput="renderUsersDatabaseList()" placeholder="ابحث بالاسم أو رقم الموبايل..."
+                            class="w-full pr-9 pl-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold focus:outline-none focus:border-emerald-500">
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" onclick="setUsersRoleFilter('all')" id="ufilter-all"
+                            class="px-3 py-2 rounded-xl text-xs font-extrabold bg-slate-900 text-white transition">الكل</button>
+                        <button type="button" onclick="setUsersRoleFilter('driver')" id="ufilter-driver"
+                            class="px-3 py-2 rounded-xl text-xs font-extrabold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition">السائقين</button>
+                        <button type="button" onclick="setUsersRoleFilter('passenger')" id="ufilter-passenger"
+                            class="px-3 py-2 rounded-xl text-xs font-extrabold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition">الركاب</button>
+                    </div>
+                </div>
+
+                <!-- Summary Strip -->
+                <div id="users-db-summary" class="grid grid-cols-3 gap-2 text-center"></div>
+
+                <!-- Users Cards Grid -->
+                <div id="users-db-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3.5"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== FULLSCREEN ID PHOTO LIGHTBOX ==================== -->
+    <div id="id-lightbox-modal" class="fixed inset-0 z-[65] hidden bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4" onclick="closeIdLightbox()">
+        <div class="max-w-2xl w-full bg-white rounded-3xl overflow-hidden shadow-2xl border border-slate-700" onclick="event.stopPropagation()">
+            <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
+                <span id="id-lightbox-title" class="text-xs font-black">صورة البطاقة الشخصية</span>
+                <button onclick="closeIdLightbox()" class="w-7 h-7 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-xs">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-3 bg-slate-950 flex items-center justify-center">
+                <img id="id-lightbox-img" src="" alt="البطاقة الشخصية" class="max-h-[75vh] w-auto rounded-xl object-contain">
             </div>
         </div>
     </div>
@@ -676,10 +785,15 @@
             users: [],
             currentUser: null,
             authMode: 'register', // 'register' | 'login'
+            authRole: 'passenger', // 'passenger' | 'driver' | 'both'
             pendingIdPhotoDataUrl: '',
             pendingIdPhotoOcrBase64: '',
             isVerifyingId: false,
-            afterAuthCallback: null
+            afterAuthCallback: null,
+
+            // Admin Users Database state
+            isAdminUnlocked: false,
+            usersRoleFilter: 'all'
         };
 
         // Leaflet map instances
@@ -922,6 +1036,10 @@
                             if (refreshed) state.currentUser = refreshed;
                         }
                         renderHeaderUser();
+                        updateUsersBadge();
+                        if (!document.getElementById('users-db-modal').classList.contains('hidden') && state.isAdminUnlocked) {
+                            renderUsersDatabaseList();
+                        }
                     },
                     (error) => {
                         console.error('Users sync error:', error);
@@ -1108,6 +1226,7 @@
         // ==========================================================
         function renderAll() {
             renderHeaderUser();
+            updateUsersBadge();
             syncUserToForms();
             renderPassengerTrips();
             renderMyBookings();
@@ -1645,6 +1764,7 @@
                         bookings: []
                     };
                     await setDoc(tripDocRef(newTrip.id), serializeTripForFirestore(newTrip));
+                    await upgradeUserRoleIfNeeded(state.currentUser, 'driver');
                     switchDriverTab('my-trips');
                     showToast('تم نشر الرحلة بنجاح وظهرت الآن لجميع الركاب', 'success');
                 }
@@ -1959,6 +2079,9 @@
 
             try {
                 await updateDoc(tripDocRef(trip.id), { bookings: updatedBookings });
+                if (state.currentUser) {
+                    await upgradeUserRoleIfNeeded(state.currentUser, 'passenger');
+                }
                 closeBookingModal();
                 switchPassengerTab('bookings');
                 showToast('تم تأكيد حجزك ومزامنته مع الكابتن فوراً!', 'success');
@@ -2135,6 +2258,7 @@
             state.authMode = mode;
             const regTab = document.getElementById('auth-tab-register');
             const logTab = document.getElementById('auth-tab-login');
+            const roleField = document.getElementById('auth-field-role');
             const nameField = document.getElementById('auth-field-name');
             const idField = document.getElementById('auth-field-id');
             const titleEl = document.getElementById('auth-modal-title');
@@ -2144,6 +2268,7 @@
             if (mode === 'register') {
                 regTab.className = 'py-2 rounded-xl text-xs font-extrabold bg-white text-emerald-700 shadow-sm transition';
                 logTab.className = 'py-2 rounded-xl text-xs font-extrabold text-slate-600 hover:text-slate-900 transition';
+                roleField.classList.remove('hidden');
                 nameField.classList.remove('hidden');
                 idField.classList.remove('hidden');
                 nameInput.required = true;
@@ -2152,12 +2277,26 @@
             } else {
                 logTab.className = 'py-2 rounded-xl text-xs font-extrabold bg-white text-emerald-700 shadow-sm transition';
                 regTab.className = 'py-2 rounded-xl text-xs font-extrabold text-slate-600 hover:text-slate-900 transition';
+                roleField.classList.add('hidden');
                 nameField.classList.add('hidden');
                 idField.classList.add('hidden');
                 nameInput.required = false;
                 titleEl.textContent = 'تسجيل الدخول';
                 if (submitBtn) submitBtn.innerHTML = `<i class="fa-solid fa-right-to-bracket"></i><span>تسجيل الدخول</span>`;
             }
+        }
+
+        function setAuthRole(role) {
+            state.authRole = role;
+            ['passenger', 'driver', 'both'].forEach(r => {
+                const btn = document.getElementById('role-btn-' + r);
+                if (!btn) return;
+                if (r === role) {
+                    btn.className = 'py-2 rounded-lg text-xs font-extrabold bg-white text-emerald-700 shadow-sm transition';
+                } else {
+                    btn.className = 'py-2 rounded-lg text-xs font-extrabold text-slate-600 hover:text-slate-900 transition';
+                }
+            });
         }
 
         function handleIdPhotoUpload(event) {
@@ -2375,6 +2514,7 @@
                     id: 'usr-' + Date.now(),
                     name,
                     phone,
+                    role: state.authRole || 'passenger',
                     idPhoto: state.pendingIdPhotoDataUrl,
                     verified: true,
                     createdAt: Date.now()
@@ -2460,6 +2600,195 @@
             closeProfileModal();
             renderAll();
             showToast('تم تسجيل الخروج من الحساب', 'info');
+        }
+
+        // ==========================================================
+        // 9B. USERS DATABASE DIRECTORY (ADMIN VIEW) & ROLE SYNC
+        // ==========================================================
+        const ADMIN_ACCESS_PIN = '0222';
+
+        function updateUsersBadge() {
+            const badge = document.getElementById('badge-total-users');
+            if (badge) badge.textContent = state.users.length;
+        }
+
+        async function upgradeUserRoleIfNeeded(user, activityType) {
+            if (!user || !firebaseAuthUser) return;
+            const currentRole = user.role || 'passenger';
+            let nextRole = currentRole;
+            if (currentRole === 'passenger' && activityType === 'driver') nextRole = 'both';
+            if (currentRole === 'driver' && activityType === 'passenger') nextRole = 'both';
+
+            if (nextRole !== currentRole) {
+                try {
+                    await updateDoc(userDocRef(user.id), { role: nextRole });
+                    state.currentUser = { ...user, role: nextRole };
+                } catch (err) {
+                    console.warn('Role update skipped:', err);
+                }
+            }
+        }
+
+        function openUsersDatabaseModal() {
+            document.getElementById('users-db-modal').classList.remove('hidden');
+            if (state.isAdminUnlocked) {
+                document.getElementById('users-db-lock-screen').classList.add('hidden');
+                document.getElementById('users-db-content').classList.remove('hidden');
+                renderUsersDatabaseList();
+            } else {
+                document.getElementById('users-db-lock-screen').classList.remove('hidden');
+                document.getElementById('users-db-content').classList.add('hidden');
+                document.getElementById('admin-pin-input').value = '';
+            }
+        }
+
+        function closeUsersDatabaseModal() {
+            document.getElementById('users-db-modal').classList.add('hidden');
+        }
+
+        function unlockUsersDatabase(e) {
+            e.preventDefault();
+            const entered = document.getElementById('admin-pin-input').value.trim();
+            if (entered === ADMIN_ACCESS_PIN) {
+                state.isAdminUnlocked = true;
+                document.getElementById('users-db-lock-screen').classList.add('hidden');
+                document.getElementById('users-db-content').classList.remove('hidden');
+                renderUsersDatabaseList();
+                showToast('تم فتح قاعدة بيانات المستخدمين بنجاح', 'success');
+            } else {
+                showToast('رمز الإدارة غير صحيح (الافتراضي: 1234)', 'error');
+            }
+        }
+
+        function setUsersRoleFilter(filter) {
+            state.usersRoleFilter = filter;
+            ['all', 'driver', 'passenger'].forEach(f => {
+                const btn = document.getElementById('ufilter-' + f);
+                if (!btn) return;
+                if (f === filter) {
+                    btn.className = 'px-3 py-2 rounded-xl text-xs font-extrabold bg-slate-900 text-white transition';
+                } else {
+                    btn.className = 'px-3 py-2 rounded-xl text-xs font-extrabold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition';
+                }
+            });
+            renderUsersDatabaseList();
+        }
+
+        function getRoleBadgeHtml(role) {
+            if (role === 'driver') {
+                return `<span class="bg-sky-50 text-sky-700 border border-sky-200 px-2 py-0.5 rounded-full text-[10px] font-black"><i class="fa-solid fa-car ml-1"></i>سائق</span>`;
+            }
+            if (role === 'both') {
+                return `<span class="bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full text-[10px] font-black"><i class="fa-solid fa-arrows-left-right ml-1"></i>سائق وراكب</span>`;
+            }
+            return `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-black"><i class="fa-solid fa-user ml-1"></i>راكب</span>`;
+        }
+
+        function renderUsersDatabaseList() {
+            const searchQ = (document.getElementById('users-db-search')?.value || '').trim().toLowerCase();
+            const allUsers = [...state.users].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+            const totalCount = allUsers.length;
+            const driversCount = allUsers.filter(u => u.role === 'driver' || u.role === 'both').length;
+            const passengersCount = allUsers.filter(u => !u.role || u.role === 'passenger' || u.role === 'both').length;
+
+            document.getElementById('users-db-summary').innerHTML = `
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl p-2.5">
+                    <div class="text-lg font-black text-slate-900">${totalCount}</div>
+                    <div class="text-[11px] font-bold text-slate-500">إجمالي المسجلين</div>
+                </div>
+                <div class="bg-sky-50 border border-sky-200 rounded-2xl p-2.5">
+                    <div class="text-lg font-black text-sky-700">${driversCount}</div>
+                    <div class="text-[11px] font-bold text-sky-700">السائقين</div>
+                </div>
+                <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-2.5">
+                    <div class="text-lg font-black text-emerald-700">${passengersCount}</div>
+                    <div class="text-[11px] font-bold text-emerald-700">الركاب</div>
+                </div>
+            `;
+
+            const filtered = allUsers.filter(u => {
+                const r = u.role || 'passenger';
+                if (state.usersRoleFilter === 'driver' && r !== 'driver' && r !== 'both') return false;
+                if (state.usersRoleFilter === 'passenger' && r !== 'passenger' && r !== 'both') return false;
+                if (searchQ) {
+                    const matchName = (u.name || '').toLowerCase().includes(searchQ);
+                    const matchPhone = (u.phone || '').includes(searchQ);
+                    if (!matchName && !matchPhone) return false;
+                }
+                return true;
+            });
+
+            const grid = document.getElementById('users-db-grid');
+            if (filtered.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full bg-slate-50 border border-slate-200 rounded-2xl p-8 text-center space-y-1">
+                        <p class="text-sm font-black text-slate-700">لا يوجد مستخدمون مطابقون للبحث</p>
+                        <p class="text-xs font-semibold text-slate-500">سيظهر هنا تلقائياً كل سائق أو راكب يقوم بإنشاء حساب جديد</p>
+                    </div>`;
+                return;
+            }
+
+            grid.innerHTML = filtered.map(u => {
+                const dateStr = u.createdAt ? new Date(u.createdAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' }) : 'مسجل';
+                const waPhone = u.phone ? '2' + u.phone : '';
+                const safeName = escapeHtml(u.name || 'بدون اسم');
+                const safePhone = escapeHtml(u.phone || '');
+
+                return `
+                <div class="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between gap-3">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h4 class="text-sm font-black text-slate-900">${safeName}</h4>
+                                ${getRoleBadgeHtml(u.role)}
+                            </div>
+                            <div class="flex items-center gap-2 text-xs font-extrabold text-slate-700">
+                                <i class="fa-solid fa-phone text-emerald-600"></i>
+                                <span class="dir-ltr">${safePhone}</span>
+                            </div>
+                            <p class="text-[10px] font-bold text-slate-400">تاريخ التسجيل: ${dateStr}</p>
+                        </div>
+
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <a href="tel:${safePhone}" title="اتصال هاتفي"
+                                class="w-8 h-8 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 flex items-center justify-center text-xs transition">
+                                <i class="fa-solid fa-phone"></i>
+                            </a>
+                            <a href="https://wa.me/${waPhone}" target="_blank" rel="noopener" title="مراسلة واتساب"
+                                class="w-8 h-8 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center justify-center text-sm transition">
+                                <i class="fa-brands fa-whatsapp"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    ${u.idPhoto ? `
+                    <div class="relative group cursor-pointer rounded-xl overflow-hidden border border-slate-200 bg-slate-100"
+                        onclick="openIdLightbox('${u.id}')">
+                        <img src="${u.idPhoto}" alt="بطاقة ${safeName}" class="w-full h-32 object-cover group-hover:scale-105 transition duration-300">
+                        <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                            <span class="bg-white text-slate-900 px-3 py-1 rounded-full text-[11px] font-black shadow">
+                                <i class="fa-solid fa-magnifying-glass-plus ml-1"></i>تكبير صورة البطاقة
+                            </span>
+                        </div>
+                    </div>` : `
+                    <div class="h-20 rounded-xl bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center text-xs font-bold text-slate-400">
+                        لا توجد صورة بطاقة مرفقة
+                    </div>`}
+                </div>`;
+            }).join('');
+        }
+
+        function openIdLightbox(userId) {
+            const user = state.users.find(u => u.id === userId);
+            if (!user || !user.idPhoto) return;
+            document.getElementById('id-lightbox-title').textContent = `بطاقة: ${user.name} (${user.phone})`;
+            document.getElementById('id-lightbox-img').src = user.idPhoto;
+            document.getElementById('id-lightbox-modal').classList.remove('hidden');
+        }
+
+        function closeIdLightbox() {
+            document.getElementById('id-lightbox-modal').classList.add('hidden');
         }
 
         // ==========================================================
@@ -2619,11 +2948,19 @@
         window.openAuthModal = openAuthModal;
         window.closeAuthModal = closeAuthModal;
         window.switchAuthTab = switchAuthTab;
+        window.setAuthRole = setAuthRole;
         window.handleIdPhotoUpload = handleIdPhotoUpload;
         window.handleAuthFormSubmit = handleAuthFormSubmit;
         window.openProfileModal = openProfileModal;
         window.closeProfileModal = closeProfileModal;
         window.logoutUser = logoutUser;
+        window.openUsersDatabaseModal = openUsersDatabaseModal;
+        window.closeUsersDatabaseModal = closeUsersDatabaseModal;
+        window.unlockUsersDatabase = unlockUsersDatabase;
+        window.setUsersRoleFilter = setUsersRoleFilter;
+        window.renderUsersDatabaseList = renderUsersDatabaseList;
+        window.openIdLightbox = openIdLightbox;
+        window.closeIdLightbox = closeIdLightbox;
         window.closeConfirmModal = closeConfirmModal;
 
         // ==========================================================
