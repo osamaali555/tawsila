@@ -1,4 +1,4 @@
-*<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -556,15 +556,15 @@
 
                     <!-- National ID Photo Upload (Register only) -->
                     <div id="auth-field-id">
-                        <label class="block text-xs font-bold text-slate-700 mb-1.5">صورة البطاقة الشخصية (الوجه الأمامي بالعرض)</label>
+                        <label class="block text-xs font-bold text-slate-700 mb-1.5">صورة البطاقة الشخصية (الوجه الأمامي)</label>
                         <label id="id-upload-box" for="auth-id-input"
                             class="block border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-slate-50 hover:bg-emerald-50/40 rounded-2xl p-4 text-center cursor-pointer transition">
                             <div id="id-upload-placeholder" class="space-y-1.5">
                                 <div class="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center text-lg">
                                     <i class="fa-solid fa-id-card"></i>
                                 </div>
-                                <p class="text-xs font-extrabold text-slate-700">اضغط لرفع صورة البطاقة أفقياً أو التصوير بالكاميرا</p>
-                                <p class="text-[10px] font-semibold text-slate-400">ممنوع الصور الشخصية — يجب تصوير البطاقة كاملة بالعرض</p>
+                                <p class="text-xs font-extrabold text-slate-700">اضغط لرفع صورة البطاقة من المعرض أو التصوير بالكاميرا</p>
+                                <p class="text-[10px] font-semibold text-slate-400">يرجى إرفاق صورة واضحة للبطاقة الشخصية</p>
                             </div>
                             <div id="id-upload-preview-wrap" class="hidden space-y-2">
                                 <img id="id-upload-preview" src="" alt="صورة البطاقة" class="w-full h-36 object-cover rounded-xl border border-slate-200 shadow-sm">
@@ -788,6 +788,8 @@
             authRole: 'passenger', // 'passenger' | 'driver' | 'both'
             pendingIdPhotoDataUrl: '',
             pendingIdPhotoOcrBase64: '',
+            pendingIdWidth: 0,
+            pendingIdHeight: 0,
             isVerifyingId: false,
             afterAuthCallback: null,
 
@@ -2315,6 +2317,9 @@
                 const img = new Image();
                 img.onload = () => {
                     try {
+                        state.pendingIdWidth = img.naturalWidth || img.width || 600;
+                        state.pendingIdHeight = img.naturalHeight || img.height || 400;
+
                         const thumbWidth = 480;
                         const thumbScale = Math.min(1, thumbWidth / img.width);
                         const thumbCanvas = document.createElement('canvas');
@@ -2336,7 +2341,7 @@
                         document.getElementById('id-upload-preview').src = compressedDataUrl;
                         document.getElementById('id-upload-placeholder').classList.add('hidden');
                         document.getElementById('id-upload-preview-wrap').classList.remove('hidden');
-                        showToast('تم إرفاق صورة البطاقة — سيتم التأكد من وضوح البطاقة عند المتابعة', 'success');
+                        showToast('تم إرفاق صورة البطاقة بنجاح', 'success');
                     } catch (err) {
                         showToast('تعذر معالجة الصورة، جرب صورة أخرى', 'error');
                     }
@@ -2371,7 +2376,8 @@
         }
 
         /**
-         * Uses Gemini Vision API to verify ONLY that the uploaded image is a clear official ID card (no name matching).
+         * Uses Gemini Vision API when a valid browser API key (AIzaSy...) is configured,
+         * and gracefully falls back to flexible local ID card check if the API is unreachable.
          */
         async function verifyIdCardOnlyWithGemini(base64Image) {
             const apiKey = "AQ.Ab8RN6JC2lDTyHmXI0noSQMXa3YZ7B_9Qn2BpyNuDjP-hakjHA";
@@ -2380,8 +2386,8 @@
             const prompt = `أنت نظام تحقق من الهوية لتطبيق مصري لمشاركة الركوب (توصيلة).
 قم بفحص الصورة المرفقة بدقة للتأكد من نوعها:
 1. هل الصورة هي بطاقة هوية رسمية واضحة (مثل بطاقة الرقم القومي المصرية أو جواز سفر أو رخصة قيادة)؟
-   - إذا كانت صورة بطاقة هوية رسمية واضحة (بغض النظر عن الاسم المكتوب عليها)، اجعل isIdCard = true.
-   - إذا كانت صورة شخصية (بورتريه/سيلفي)، صورة عشوائية، شاشة سوداء، مستند آخر غير الهوية، أو غير واضحة تماماً، فاجعل isIdCard = false.
+   - إذا كانت صورة بطاقة هوية رسمية (بغض النظر عن الاسم المكتوب عليها أو زاوية التصوير)، اجعل isIdCard = true.
+   - إذا كانت صورة شخصية (بورتريه/سيلفي فقط)، صورة عشوائية، شاشة سوداء، أو مستند آخر غير الهوية، فاجعل isIdCard = false.
 2. لا تقم بمطابقة أي اسم؛ فقط تحقق من أن الصورة بطاقة هوية رسمية.
 3. اكتب سبباً مختصراً وواضحاً باللغة العربية في حقل reason.`;
 
@@ -2413,36 +2419,21 @@
                 }
             };
 
-            const delays = [1000, 2000];
-            for (let attempt = 0; attempt <= delays.length; attempt++) {
-                try {
-                    const response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
 
-                    if (!response.ok) {
-                        if (attempt < delays.length && (response.status === 429 || response.status >= 500)) {
-                            await new Promise(r => setTimeout(r, delays[attempt]));
-                            continue;
-                        }
-                        throw new Error('HTTP ' + response.status);
-                    }
-
-                    const result = await response.json();
-                    const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (!jsonText) throw new Error('Empty AI response');
-
-                    return JSON.parse(jsonText);
-                } catch (err) {
-                    if (attempt < delays.length) {
-                        await new Promise(r => setTimeout(r, delays[attempt]));
-                    } else {
-                        throw err;
-                    }
-                }
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
             }
+
+            const result = await response.json();
+            const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!jsonText) throw new Error('Empty AI response');
+
+            return JSON.parse(jsonText);
         }
 
         async function handleAuthFormSubmit(e) {
@@ -2482,7 +2473,7 @@
                 state.isVerifyingId = true;
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>جاري التأكد من صورة البطاقة...</span>`;
-                showIdVerifyStatus('loading', 'جاري التأكد من أن الصورة المرفقة بطاقة هوية واضحة...');
+                showIdVerifyStatus('loading', 'جاري التأكد من صورة البطاقة المرفقة...');
 
                 try {
                     const verification = await verifyIdCardOnlyWithGemini(state.pendingIdPhotoOcrBase64);
@@ -2495,18 +2486,24 @@
 
                     showIdVerifyStatus('success', 'تم التأكد من أن الصورة بطاقة هوية صالحة بنجاح');
                 } catch (err) {
-                    // Geometric fallback: reject portrait selfies/profile photos & require ID card landscape aspect ratio
-                    const imgEl = document.getElementById('id-upload-preview');
-                    const w = imgEl ? imgEl.naturalWidth : 0;
-                    const h = imgEl ? imgEl.naturalHeight : 0;
-                    const aspectRatio = h > 0 ? w / h : 0;
-                    const isLandscapeIdShape = w >= 250 && h >= 150 && aspectRatio >= 1.25 && aspectRatio <= 2.1;
+                    // Flexible local fallback when API is unreachable:
+                    // Accepts standard ID photos (landscape, square-ish, or slightly angled) and rejects tall portrait selfies
+                    const w = state.pendingIdWidth || 600;
+                    const h = state.pendingIdHeight || 400;
+                    const isVeryTallPortrait = h > w * 1.38;
 
-                    if (!isLandscapeIdShape) {
-                        showIdVerifyStatus('error', 'مرفوض: يبدو أن هذه صورة شخصية طولية وليست بطاقة شخصية أفقية. يرجى تصوير البطاقة بالعرض.');
-                        showToast('يرجى رفع صورة البطاقة الشخصية بالعرض وليس صورة شخصية', 'error');
+                    if (w < 150 || h < 120) {
+                        showIdVerifyStatus('error', 'الصورة صغيرة جداً وغير واضحة. يرجى رفع صورة أوضح للبطاقة.');
+                        showToast('يرجى رفع صورة أوضح للبطاقة الشخصية', 'error');
                         return;
                     }
+
+                    if (isVeryTallPortrait) {
+                        showIdVerifyStatus('error', 'هذه صورة طولية (بورتريه). يرجى تصوير البطاقة الشخصية بالعرض.');
+                        showToast('يرجى تصوير البطاقة الشخصية بالعرض', 'error');
+                        return;
+                    }
+
                     showIdVerifyStatus('success', 'تم قبول صورة البطاقة المرفقة بنجاح');
                 } finally {
                     state.isVerifyingId = false;
@@ -2548,6 +2545,8 @@
             state.currentUser = authenticatedUser;
             state.pendingIdPhotoDataUrl = '';
             state.pendingIdPhotoOcrBase64 = '';
+            state.pendingIdWidth = 0;
+            state.pendingIdHeight = 0;
             hideIdVerifyStatus();
 
             if (firebaseAuthUser) {
