@@ -2377,11 +2377,19 @@
 
         /**
          * Uses Gemini Vision API strictly to verify that the uploaded image is a real ID card.
-         * Rejects portraits/selfies or non-ID images, and blocks registration if verification fails.
+         * Supports both Google Auth Keys (AQ.Ab...) via Bearer header and standard API keys (AIzaSy...).
          */
         async function verifyIdCardOnlyWithGemini(base64Image) {
-            const apiKey = "AIzaSyApO-7UTu3esaHI-NTqcJIM7XCYAcDMdf4";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            const geminiKey = "AQ.Ab8RN6ITOI6AX8Q-I21C-1qMamvBjOFKU2VIoUafMvKcN4gqtA";
+            const isAuthKey = geminiKey.startsWith("AQ.");
+            const apiUrl = isAuthKey
+                ? "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+                : `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+
+            const headers = { "Content-Type": "application/json" };
+            if (isAuthKey) {
+                headers["Authorization"] = `Bearer ${geminiKey}`;
+            }
 
             const prompt = `أنت نظام تحقق صارم من الهوية لتطبيق مصري لمشاركة الركوب (توصيلة).
 قم بفحص الصورة المرفقة بدقة للتأكد من نوعها:
@@ -2421,7 +2429,7 @@
 
             const response = await fetch(apiUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(payload)
             });
 
