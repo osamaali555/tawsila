@@ -657,7 +657,7 @@
                     <p class="text-xs font-semibold text-slate-500">أدخل رمز مرور الإدارة لعرض بيانات وصور بطاقات المستخدمين</p>
                 </div>
                 <form onsubmit="unlockUsersDatabase(event)" class="space-y-3">
-                    <input type="password" id="admin-pin-input" inputmode="numeric" maxlength="8" required placeholder="أدخل رمز الإدارة (الافتراضي: 1234)"
+                    <input type="password" id="admin-pin-input" inputmode="numeric" maxlength="8" required placeholder="أدخل رمز مرور الإدارة"
                         class="w-full px-4 py-3 rounded-2xl border border-slate-300 text-center text-base font-black tracking-widest focus:outline-none focus:border-emerald-500">
                     <button type="submit"
                         class="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition">
@@ -2380,7 +2380,7 @@
          * and gracefully falls back to flexible local ID card check if the API is unreachable.
          */
         async function verifyIdCardOnlyWithGemini(base64Image) {
-            const apiKey = "AQ.Ab8RN6JC2lDTyHmXI0noSQMXa3YZ7B_9Qn2BpyNuDjP-hakjHA";
+            const apiKey = "AIzaSyApO-7UTu3esaHI-NTqcJIM7XCYAcDMdf4";
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
             const prompt = `أنت نظام تحقق من الهوية لتطبيق مصري لمشاركة الركوب (توصيلة).
@@ -2608,7 +2608,7 @@
         // ==========================================================
         // 9B. USERS DATABASE DIRECTORY (ADMIN VIEW) & ROLE SYNC
         // ==========================================================
-        const ADMIN_ACCESS_PIN = '1234';
+        const ADMIN_ACCESS_PIN = '0333';
 
         function updateUsersBadge() {
             const badge = document.getElementById('badge-total-users');
@@ -2659,7 +2659,7 @@
                 renderUsersDatabaseList();
                 showToast('تم فتح قاعدة بيانات المستخدمين بنجاح', 'success');
             } else {
-                showToast('رمز الإدارة غير صحيح (الافتراضي: 1234)', 'error');
+                showToast('رمز الإدارة غير صحيح', 'error');
             }
         }
 
