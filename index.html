@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+*<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -556,15 +556,15 @@
 
                     <!-- National ID Photo Upload (Register only) -->
                     <div id="auth-field-id">
-                        <label class="block text-xs font-bold text-slate-700 mb-1.5">صورة البطاقة الشخصية (الوجه الأمامي)</label>
+                        <label class="block text-xs font-bold text-slate-700 mb-1.5">صورة البطاقة الشخصية (الوجه الأمامي بالعرض)</label>
                         <label id="id-upload-box" for="auth-id-input"
                             class="block border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-slate-50 hover:bg-emerald-50/40 rounded-2xl p-4 text-center cursor-pointer transition">
                             <div id="id-upload-placeholder" class="space-y-1.5">
                                 <div class="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center text-lg">
                                     <i class="fa-solid fa-id-card"></i>
                                 </div>
-                                <p class="text-xs font-extrabold text-slate-700">اضغط لرفع صورة من الهاتف أو التصوير بالكاميرا</p>
-                                <p class="text-[10px] font-semibold text-slate-400">JPG, PNG — بياناتك مشفرة وآمنة لتوثيق الحساب فقط</p>
+                                <p class="text-xs font-extrabold text-slate-700">اضغط لرفع صورة البطاقة أفقياً أو التصوير بالكاميرا</p>
+                                <p class="text-[10px] font-semibold text-slate-400">ممنوع الصور الشخصية — يجب تصوير البطاقة كاملة بالعرض</p>
                             </div>
                             <div id="id-upload-preview-wrap" class="hidden space-y-2">
                                 <img id="id-upload-preview" src="" alt="صورة البطاقة" class="w-full h-36 object-cover rounded-xl border border-slate-200 shadow-sm">
@@ -2374,14 +2374,14 @@
          * Uses Gemini Vision API to verify ONLY that the uploaded image is a clear official ID card (no name matching).
          */
         async function verifyIdCardOnlyWithGemini(base64Image) {
-            const apiKey = "";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+            const apiKey = "AQ.Ab8RN6JC2lDTyHmXI0noSQMXa3YZ7B_9Qn2BpyNuDjP-hakjHA";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
             const prompt = `أنت نظام تحقق من الهوية لتطبيق مصري لمشاركة الركوب (توصيلة).
-قم بفحص الصورة المرفقة فقط للتأكد من نوعها:
+قم بفحص الصورة المرفقة بدقة للتأكد من نوعها:
 1. هل الصورة هي بطاقة هوية رسمية واضحة (مثل بطاقة الرقم القومي المصرية أو جواز سفر أو رخصة قيادة)؟
    - إذا كانت صورة بطاقة هوية رسمية واضحة (بغض النظر عن الاسم المكتوب عليها)، اجعل isIdCard = true.
-   - إذا كانت صورة عشوائية، سيلفي، شاشة سوداء، مستند آخر غير الهوية، أو غير واضحة تماماً، فاجعل isIdCard = false.
+   - إذا كانت صورة شخصية (بورتريه/سيلفي)، صورة عشوائية، شاشة سوداء، مستند آخر غير الهوية، أو غير واضحة تماماً، فاجعل isIdCard = false.
 2. لا تقم بمطابقة أي اسم؛ فقط تحقق من أن الصورة بطاقة هوية رسمية.
 3. اكتب سبباً مختصراً وواضحاً باللغة العربية في حقل reason.`;
 
@@ -2495,12 +2495,16 @@
 
                     showIdVerifyStatus('success', 'تم التأكد من أن الصورة بطاقة هوية صالحة بنجاح');
                 } catch (err) {
-                    // Fallback when hosted externally without a Gemini API key
+                    // Geometric fallback: reject portrait selfies/profile photos & require ID card landscape aspect ratio
                     const imgEl = document.getElementById('id-upload-preview');
-                    const hasValidDimensions = imgEl && imgEl.naturalWidth >= 150 && imgEl.naturalHeight >= 100;
-                    if (!hasValidDimensions) {
-                        showIdVerifyStatus('error', 'الصورة المرفقة غير واضحة أو صغيرة جداً، يرجى رفع صورة واضحة للبطاقة.');
-                        showToast('الصورة المرفقة غير صالحة', 'error');
+                    const w = imgEl ? imgEl.naturalWidth : 0;
+                    const h = imgEl ? imgEl.naturalHeight : 0;
+                    const aspectRatio = h > 0 ? w / h : 0;
+                    const isLandscapeIdShape = w >= 250 && h >= 150 && aspectRatio >= 1.25 && aspectRatio <= 2.1;
+
+                    if (!isLandscapeIdShape) {
+                        showIdVerifyStatus('error', 'مرفوض: يبدو أن هذه صورة شخصية طولية وليست بطاقة شخصية أفقية. يرجى تصوير البطاقة بالعرض.');
+                        showToast('يرجى رفع صورة البطاقة الشخصية بالعرض وليس صورة شخصية', 'error');
                         return;
                     }
                     showIdVerifyStatus('success', 'تم قبول صورة البطاقة المرفقة بنجاح');
@@ -2605,7 +2609,7 @@
         // ==========================================================
         // 9B. USERS DATABASE DIRECTORY (ADMIN VIEW) & ROLE SYNC
         // ==========================================================
-        const ADMIN_ACCESS_PIN = '0222';
+        const ADMIN_ACCESS_PIN = '1234';
 
         function updateUsersBadge() {
             const badge = document.getElementById('badge-total-users');
@@ -2759,6 +2763,10 @@
                                 class="w-8 h-8 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center justify-center text-sm transition">
                                 <i class="fa-brands fa-whatsapp"></i>
                             </a>
+                            <button type="button" onclick="deleteRegisteredUserConfirm('${u.id}', '${safeName}')" title="حذف المستخدم"
+                                class="w-8 h-8 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 flex items-center justify-center text-xs transition">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
                         </div>
                     </div>
 
@@ -2789,6 +2797,23 @@
 
         function closeIdLightbox() {
             document.getElementById('id-lightbox-modal').classList.add('hidden');
+        }
+
+        function deleteRegisteredUserConfirm(userId, userName) {
+            openConfirmModal(
+                'حذف حساب مستخدم',
+                `هل تريد حذف حساب "${userName}" نهائياً من قاعدة البيانات؟`,
+                async () => {
+                    if (!firebaseAuthUser) return;
+                    try {
+                        await deleteDoc(userDocRef(userId));
+                        showToast('تم حذف المستخدم بنجاح', 'info');
+                    } catch (err) {
+                        console.error('Delete user error:', err);
+                        showToast('تعذر حذف المستخدم (تأكد من صلاحيات Firestore Rules)', 'error');
+                    }
+                }
+            );
         }
 
         // ==========================================================
@@ -2961,6 +2986,7 @@
         window.renderUsersDatabaseList = renderUsersDatabaseList;
         window.openIdLightbox = openIdLightbox;
         window.closeIdLightbox = closeIdLightbox;
+        window.deleteRegisteredUserConfirm = deleteRegisteredUserConfirm;
         window.closeConfirmModal = closeConfirmModal;
 
         // ==========================================================
