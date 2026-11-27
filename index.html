@@ -713,11 +713,12 @@
     <!-- ==================== TOAST NOTIFICATION ==================== -->
     <div id="toast-container" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] flex flex-col gap-2 w-[90%] max-w-sm pointer-events-none"></div>
 
-    <!-- ==================== APPLICATION JAVASCRIPT (FIREBASE POWERED) ==================== -->
+    <!-- ==================== APPLICATION JAVASCRIPT (FIREBASE + FIREBASE AI SDK) ==================== -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAI, getGenerativeModel, GoogleAIBackend, Schema } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-ai.js";
 
         // ==========================================================
         // 0. FIREBASE INITIALIZATION & REAL-TIME SYNC SETUP
@@ -741,6 +742,7 @@
         let firebaseApp = null;
         let db = null;
         let auth = null;
+        let firebaseAI = null;
         let firebaseAuthUser = null;
         let isCloudReady = false;
 
@@ -977,6 +979,11 @@
                 firebaseApp = initializeApp(firebaseConfig);
                 db = getFirestore(firebaseApp);
                 auth = getAuth(firebaseApp);
+                try {
+                    firebaseAI = getAI(firebaseApp, { backend: new GoogleAIBackend() });
+                } catch (aiInitErr) {
+                    console.warn('Firebase AI init notice:', aiInitErr);
+                }
 
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     const cred = await signInWithCustomToken(auth, __initial_auth_token);
@@ -2376,88 +2383,50 @@
         }
 
         /**
-         * Uses Gemini Vision API strictly to verify that the uploaded image is a real ID card.
-         * Supports both query parameter and header authentication for Google AI Studio keys.
+         * Uses official Firebase AI SDK (firebase/ai) bound to the authenticated Firebase project
+         * to inspect the uploaded photo and verify it is a real ID card (not a selfie/portrait).
          */
         async function verifyIdCardOnlyWithGemini(base64Image) {
-            const geminiKey = "AQ.Ab8RN6JbzN0ATIGD-5JhX_th7WDN4mTkpU8mSyUioAsPTvgLTg";
+            const aiInstance = firebaseAI || getAI(firebaseApp, { backend: new GoogleAIBackend() });
 
             const prompt = `أنت نظام تحقق صارم من الهوية لتطبيق مصري لمشاركة الركوب (توصيلة).
 قم بفحص الصورة المرفقة بدقة للتأكد من نوعها:
 1. هل الصورة هي بطاقة هوية رسمية حقيقية وواضحة (مثل بطاقة الرقم القومي المصرية أو جواز سفر أو رخصة قيادة)؟
-   - إذا كانت صورة بطاقة هوية رسمية حقيقية، اجعل isIdCard = true.
-   - إذا كانت صورة شخصية (بورتريه/سيلفي لشخص)، أو صورة عادية في مكان عام أو مسبح، أو شاشة سوداء، أو مستند آخر غير الهوية، فاجعل isIdCard = false فوراً.
+   - إذا كانت صورة بطاقة هوية رسمية حقيقية (تحتوي على شعار الدولة أو بيانات رسمية أو صورة شخصية صغيرة داخل بطاقة مستطيلة)، اجعل isIdCard = true.
+   - إذا كانت صورة شخصية فقط (بورتريه/سيلفي لشخص)، أو صورة عادية في مكان عام أو مسبح، أو شاشة سوداء، أو مستند آخر غير الهوية، فاجعل isIdCard = false فوراً.
 2. لا تقم بمطابقة أي اسم؛ فقط تحقق من أن الصورة بطاقة هوية رسمية حقيقية وليست صورة شخص.
 3. اكتب سبباً مختصراً وواضحاً باللغة العربية في حقل reason.`;
 
-            const payload = {
-                contents: [
-                    {
-                        role: "user",
-                        parts: [
-                            { text: prompt },
-                            {
-                                inlineData: {
-                                    mimeType: "image/jpeg",
-                                    data: base64Image
-                                }
-                            }
-                        ]
-                    }
-                ],
+            const idVerifySchema = Schema.object({
+                properties: {
+                    isIdCard: Schema.boolean(),
+                    reason: Schema.string()
+                },
+                required: ["isIdCard", "reason"]
+            });
+
+            const model = getGenerativeModel(aiInstance, {
+                model: "gemini-2.5-flash",
                 generationConfig: {
                     responseMimeType: "application/json",
-                    responseSchema: {
-                        type: "OBJECT",
-                        properties: {
-                            isIdCard: { type: "BOOLEAN" },
-                            reason: { type: "STRING" }
-                        },
-                        required: ["isIdCard", "reason"]
+                    responseSchema: idVerifySchema
+                }
+            });
+
+            const result = await model.generateContent([
+                prompt,
+                {
+                    inlineData: {
+                        data: base64Image,
+                        mimeType: "image/jpeg"
                     }
                 }
-            };
+            ]);
 
-            const endpoints = [
-                {
-                    url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(geminiKey)}`,
-                    headers: { "Content-Type": "application/json" }
-                },
-                {
-                    url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
-                    headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey }
-                }
-            ];
+            const responseText = result?.response?.text();
+            if (!responseText) throw new Error('استجابة فارغة من خادم التحقق');
 
-            let lastError = null;
-            for (const ep of endpoints) {
-                try {
-                    const response = await fetch(ep.url, {
-                        method: 'POST',
-                        headers: ep.headers,
-                        body: JSON.stringify(payload)
-                    });
-
-                    if (!response.ok) {
-                        let errDetail = 'HTTP ' + response.status;
-                        try {
-                            const errJson = await response.json();
-                            if (errJson?.error?.message) errDetail = errJson.error.message;
-                        } catch (_) {}
-                        throw new Error(errDetail);
-                    }
-
-                    const result = await response.json();
-                    const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (!jsonText) throw new Error('استجابة فارغة من خادم التحقق');
-
-                    return JSON.parse(jsonText);
-                } catch (err) {
-                    lastError = err;
-                }
-            }
-
-            throw lastError || new Error('تعذر الاتصال بخادم التحقق');
+            return JSON.parse(responseText);
         }
 
         async function handleAuthFormSubmit(e) {
@@ -2492,7 +2461,7 @@
                     return;
                 }
 
-                // Strictly verify that the uploaded image is an ID card via Gemini Vision
+                // Strictly verify that the uploaded image is an ID card via Firebase AI (Gemini Vision)
                 const submitBtn = document.getElementById('auth-submit-btn');
                 state.isVerifyingId = true;
                 submitBtn.disabled = true;
