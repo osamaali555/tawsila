@@ -20,9 +20,6 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <!-- Tesseract.js Local OCR (Arabic + English) for ID Card Verification -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-
     <style>
         body {
             font-family: 'Cairo', sans-serif;
@@ -716,7 +713,7 @@
     <!-- ==================== TOAST NOTIFICATION ==================== -->
     <div id="toast-container" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] flex flex-col gap-2 w-[90%] max-w-sm pointer-events-none"></div>
 
-    <!-- ==================== APPLICATION JAVASCRIPT (FIREBASE + LOCAL OCR ID VERIFIER) ==================== -->
+    <!-- ==================== APPLICATION JAVASCRIPT (FIREBASE + STRICT EGYPTIAN ID OCR) ==================== -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -807,7 +804,7 @@
         // ==========================================================
         // 2. FIRESTORE HELPERS, SERIALIZATION & REAL-TIME LISTENERS
         // ==========================================================
-        function updateCloudBadge(status) {
+        function updateCloudBadge(status, detail = '') {
             const badge = document.getElementById('cloud-status-badge');
             if (!badge) return;
             if (status === 'connected') {
@@ -815,7 +812,7 @@
                 badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> مزامنة مباشرة`;
             } else if (status === 'error') {
                 badge.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200';
-                badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> وضع غير متصل`;
+                badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${detail || 'تعذر الاتصال'}`;
             } else {
                 badge.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200';
                 badge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> جاري الاتصال...`;
@@ -1021,7 +1018,7 @@
                     },
                     (error) => {
                         console.error('Trips sync error:', error);
-                        updateCloudBadge('error');
+                        updateCloudBadge('error', 'خطأ صلاحيات');
                         showToast('تعذر مزامنة الرحلات مع السحابة', 'error');
                     }
                 );
@@ -1051,10 +1048,16 @@
             } catch (err) {
                 console.error('Firebase init failed:', err);
                 isCloudReady = false;
-                updateCloudBadge('error');
+                const code = err?.code || '';
+                if (code.includes('unauthorized-domain')) {
+                    updateCloudBadge('error', 'أضف الدومين في Firebase');
+                    showToast('أضف دومين موقعك في Firebase Authorized Domains', 'error');
+                } else {
+                    updateCloudBadge('error', 'وضع محلي');
+                    showToast('تعذر الاتصال بالسحابة: ' + (err?.message || ''), 'error');
+                }
                 state.trips = getDefaultTrips();
                 renderAll();
-                showToast('تأكد من إعدادات Firebase لتفعيل المزامنة السحابية', 'error');
             }
         }
 
@@ -2186,8 +2189,27 @@
         }
 
         // ==========================================================
-        // 9. USER ACCOUNT, EGYPTIAN PHONE VALIDATION & LOCAL OCR ID CHECK
+        // 9. USER ACCOUNT, EGYPTIAN PHONE VALIDATION & STRICT ID OCR
         // ==========================================================
+        let tesseractLoadPromise = null;
+        function ensureTesseractLoaded() {
+            if (window.Tesseract) return Promise.resolve(window.Tesseract);
+            if (tesseractLoadPromise) return tesseractLoadPromise;
+
+            tesseractLoadPromise = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+                script.async = true;
+                script.onload = () => resolve(window.Tesseract);
+                script.onerror = () => {
+                    tesseractLoadPromise = null;
+                    reject(new Error('تعذر تحميل أداة قراءة البطاقة، تأكد من اتصال الإنترنت'));
+                };
+                document.head.appendChild(script);
+            });
+            return tesseractLoadPromise;
+        }
+
         function normalizePhoneDigits(raw) {
             const arabicIndic = '٠١٢٣٤٥٦٧٨٩';
             return String(raw || '')
@@ -2329,14 +2351,13 @@
                         state.pendingIdPhotoDataUrl = compressedDataUrl;
 
                         // 2. High-resolution contrast-enhanced grayscale image for OCR
-                        // Works regardless of image orientation or whether the ID card is only part of the frame!
                         const maxDim = 1500;
                         const ocrScale = Math.min(1.5, maxDim / Math.max(img.width, img.height));
                         const ocrCanvas = document.createElement('canvas');
                         ocrCanvas.width = Math.round(img.width * ocrScale);
                         ocrCanvas.height = Math.round(img.height * ocrScale);
                         const ctx = ocrCanvas.getContext('2d');
-                        ctx.filter = 'grayscale(100%) contrast(145%) brightness(105%)';
+                        ctx.filter = 'grayscale(100%) contrast(150%) brightness(105%)';
                         ctx.drawImage(img, 0, 0, ocrCanvas.width, ocrCanvas.height);
                         state.pendingIdOcrImageUrl = ocrCanvas.toDataURL('image/png');
 
@@ -2377,19 +2398,10 @@
             if (box) box.classList.add('hidden');
         }
 
-        /**
-         * Local Browser OCR (Tesseract.js Arabic + English) ID Card Verification:
-         * - Completely independent of image aspect ratio or framing (works even if the ID card is a small part of a wide/tall photo).
-         * - Requires ZERO external API keys or servers.
-         * - Scans extracted text for Egyptian National ID markers (Arabic keywords, governorates, or 8+ consecutive digits)
-         *   and rejects selfies/portraits/random photos that contain no ID card text.
-         */
         async function verifyIdCardLocallyWithOCR(ocrImageUrl, onProgress) {
-            if (!window.Tesseract) {
-                throw new Error('مكتبة التعرف الضوئي غير محملة، تأكد من الاتصال بالإنترنت');
-            }
+            const TesseractLib = await ensureTesseractLoaded();
 
-            const result = await window.Tesseract.recognize(ocrImageUrl, 'ara+eng', {
+            const result = await TesseractLib.recognize(ocrImageUrl, 'ara+eng', {
                 logger: (m) => {
                     if (m.status === 'recognizing text' && typeof onProgress === 'function') {
                         const pct = Math.round((m.progress || 0) * 100);
@@ -2399,16 +2411,19 @@
             });
 
             const rawText = result?.data?.text || '';
-            // Normalize Arabic characters and convert Eastern Arabic numerals (٠-٩) to Western digits (0-9)
-            const normalized = normalizePhoneDigits(rawText)
+            const arabicIndic = '٠١٢٣٤٥٦٧٨٩';
+            const withWesternDigits = String(rawText)
+                .replace(/[٠-٩]/g, d => String(arabicIndic.indexOf(d)));
+
+            const normalizedText = withWesternDigits
                 .replace(/[أإآ]/g, 'ا')
                 .replace(/ة/g, 'ه')
                 .replace(/ى/g, 'ي')
                 .replace(/\s+/g, ' ')
                 .trim();
 
-            // Egyptian National ID / Official ID Arabic keywords
-            const idKeywords = [
+            // 1. Official Egyptian ID / License / Passport keywords (distinctive words only)
+            const officialIdKeywords = [
                 'جمهوريه', 'مصر', 'العربيه', 'بطاقه', 'تحقيق', 'الشخصيه',
                 'الرقم', 'القومي', 'ذكر', 'انثي', 'مسلم', 'مسيحي',
                 'اعزب', 'متزوج', 'متزوجه', 'القاهره', 'الجيزه', 'الاسكندريه',
@@ -2416,36 +2431,35 @@
                 'اسيوط', 'سوهاج', 'قنا', 'اسوان', 'الاقصر', 'المنيا', 'بني سويف',
                 'الفيوم', 'السويس', 'الاسماعيليه', 'بورسعيد', 'دمياط', 'كفر الشيخ',
                 'مطروح', 'سيناء', 'البحر الاحمر', 'الوادي الجديد', 'مركز', 'قسم',
-                'ساريه', 'تاريخ', 'اصدار', 'رخصه', 'قياده', 'جواز', 'سفر'
+                'ساريه', 'اصدار', 'رخصه', 'قياده', 'جواز', 'سفر'
             ];
 
             let matchedKeywords = 0;
-            for (const kw of idKeywords) {
-                if (normalized.includes(kw)) {
+            for (const kw of officialIdKeywords) {
+                if (normalizedText.includes(kw)) {
                     matchedKeywords++;
                 }
             }
 
-            // Check for long digit sequences (e.g., 14-digit National ID or partial 7+ digits)
-            const digitsOnly = normalized.replace(/[^\d]/g, '');
-            const hasLongNumber = /\d{7,}/.test(digitsOnly) || /(\d\s*){8,}/.test(normalized);
+            // 2. Egyptian National ID Number (14 digits starting with 2 or 3, allowing spaces between digits)
+            const compactDigits = withWesternDigits.replace(/[^\d]/g, '');
+            const hasEgyptian14DigitId = /[23]\d{13}/.test(compactDigits);
 
-            // Check for factory serial code at bottom-left of Egyptian ID (e.g. JM2015559 -> 2 letters + 6-7 digits)
-            const hasSerialCode = /[A-Za-z]{1,3}\d{5,8}/.test(normalized.replace(/\s+/g, ''));
+            // 3. Egyptian ID bottom-left factory serial number (e.g. JM2015559)
+            const compactAlphaNum = withWesternDigits.replace(/[^A-Za-z0-9]/g, '');
+            const hasEgyptianSerialCode = /[A-Za-z]{2}\d{7}/.test(compactAlphaNum);
 
-            // Extract meaningful Arabic words (3+ letters)
-            const arabicWords = normalized.match(/[\u0621-\u064A]{3,}/g) || [];
-
+            // Strict validation: must match at least one real Egyptian ID fingerprint
+            // (Does NOT accept random background noise or selfie photos)
             const isValidId =
                 matchedKeywords >= 1 ||
-                hasLongNumber ||
-                hasSerialCode ||
-                (arabicWords.length >= 4 && digitsOnly.length >= 4);
+                hasEgyptian14DigitId ||
+                hasEgyptianSerialCode;
 
             if (!isValidId) {
                 return {
                     isIdCard: false,
-                    reason: 'لم يتم العثور على بيانات أو أرقام بطاقة شخصية واضحة في الصورة (قد تكون صورة شخصية أو غير مقروءة).'
+                    reason: 'الصورة المرفقة لا تحتوي على بيانات بطاقة شخصية مصرية مقروءة (يرجى رفع صورة واضحة للبطاقة الشخصية وليس صورة شخصية).'
                 };
             }
 
@@ -2487,12 +2501,11 @@
                     return;
                 }
 
-                // Verify ID card via local browser OCR (works regardless of image dimensions or distance)
                 const submitBtn = document.getElementById('auth-submit-btn');
                 state.isVerifyingId = true;
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>جاري قراءة بيانات البطاقة...</span>`;
-                showIdVerifyStatus('loading', 'جاري فحص وقراءة بيانات البطاقة الشخصية...');
+                showIdVerifyStatus('loading', 'جاري تجهيز أداة الفحص وقراءة بيانات البطاقة...');
 
                 try {
                     const verification = await verifyIdCardLocallyWithOCR(state.pendingIdOcrImageUrl, (pct) => {
@@ -2500,8 +2513,8 @@
                     });
 
                     if (!verification.isIdCard) {
-                        showIdVerifyStatus('error', `${escapeHtml(verification.reason)} يرجى تصوير البطاقة بإضاءة أوضح.`);
-                        showToast('الصورة المرفقة ليست بطاقة شخصية واضحة', 'error');
+                        showIdVerifyStatus('error', escapeHtml(verification.reason));
+                        showToast('مرفوض: الصورة المرفقة ليست بطاقة شخصية واضحة', 'error');
                         return;
                     }
 
@@ -2995,11 +3008,12 @@
         // ==========================================================
         // 12. INITIALIZE APPLICATION ON PAGE LOAD
         // ==========================================================
-        window.addEventListener('DOMContentLoaded', () => {
-            initQuickLocationPresets();
-            renderAll();
-            initFirebaseAndSync();
-        });
+        initQuickLocationPresets();
+        renderAll();
+        initFirebaseAndSync();
     </script>
 </body>
 </html>
+```
+
+انسخ الكود الجديد من تبويب **Code** وحدّث به ملف `index.html` على GitHub؛ الآن سيرفض أي صورة سيلفي فوراً ولن يقبل إلا صورة تحتوي على بيانات البطاقة الشخصية المصرية (سواء كانت البطاقة تملأ الكادر أو جزءاً منه).
