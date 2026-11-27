@@ -713,7 +713,7 @@
     <!-- ==================== TOAST NOTIFICATION ==================== -->
     <div id="toast-container" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] flex flex-col gap-2 w-[90%] max-w-sm pointer-events-none"></div>
 
-    <!-- ==================== APPLICATION JAVASCRIPT (FIREBASE + STRICT EGYPTIAN ID OCR) ==================== -->
+    <!-- ==================== APPLICATION JAVASCRIPT (FIREBASE + ULTRA-STRICT EGYPTIAN ID OCR) ==================== -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -758,45 +758,40 @@
         ];
 
         const state = {
-            mode: 'passenger', // 'passenger' | 'driver'
-            passengerTab: 'browse', // 'browse' | 'bookings'
-            driverTab: 'create', // 'create' | 'my-trips'
-            directionFilter: 'all', // 'all' | 'go' | 'return'
+            mode: 'passenger',
+            passengerTab: 'browse',
+            driverTab: 'create',
+            directionFilter: 'all',
 
             trips: [],
 
-            // Driver create/edit form state
             editingTripId: null,
             driverDirection: 'go',
             driverAC: true,
-            mapPickMode: 'start', // 'start' | 'end'
+            mapPickMode: 'start',
             driverStartCoords: [30.0444, 30.9850],
             driverEndCoords: [30.0074, 31.4913],
             driverRouteCoords: [],
             driverDistanceKm: 52,
             driverDurationMin: 60,
 
-            // Booking modal state
             selectedTripId: null,
             selectedSeatsToBook: 1,
-            selectedDropoff: null, // { coords: [lat, lng], ratio: 0..1, label: '' }
+            selectedDropoff: null,
 
-            // User Auth state
             users: [],
             currentUser: null,
-            authMode: 'register', // 'register' | 'login'
-            authRole: 'passenger', // 'passenger' | 'driver' | 'both'
+            authMode: 'register',
+            authRole: 'passenger',
             pendingIdPhotoDataUrl: '',
             pendingIdOcrImageUrl: '',
             isVerifyingId: false,
             afterAuthCallback: null,
 
-            // Admin Users Database state
             isAdminUnlocked: false,
             usersRoleFilter: 'all'
         };
 
-        // Leaflet map instances
         let driverMap = null, driverStartMarker = null, driverEndMarker = null, driverRouteLine = null;
         let bookingMap = null, bookingRouteLine = null, bookingDropoffMarker = null;
         let dropoffsMap = null;
@@ -1099,7 +1094,7 @@
         }
 
         // ==========================================================
-        // 3. SMART PRICING ENGINE (DISTANCE TIERS + SHARING DISCOUNT)
+        // 3. SMART PRICING ENGINE
         // ==========================================================
         function getDistanceMultiplier(ratio) {
             const r = Math.max(0, Math.min(1, ratio));
@@ -2189,7 +2184,7 @@
         }
 
         // ==========================================================
-        // 9. USER ACCOUNT, EGYPTIAN PHONE VALIDATION & STRICT ID OCR
+        // 9. USER ACCOUNT, EGYPTIAN PHONE VALIDATION & ULTRA-STRICT ID OCR
         // ==========================================================
         let tesseractLoadPromise = null;
         function ensureTesseractLoaded() {
@@ -2357,7 +2352,7 @@
                         ocrCanvas.width = Math.round(img.width * ocrScale);
                         ocrCanvas.height = Math.round(img.height * ocrScale);
                         const ctx = ocrCanvas.getContext('2d');
-                        ctx.filter = 'grayscale(100%) contrast(150%) brightness(105%)';
+                        ctx.filter = 'grayscale(100%) contrast(155%) brightness(105%)';
                         ctx.drawImage(img, 0, 0, ocrCanvas.width, ocrCanvas.height);
                         state.pendingIdOcrImageUrl = ocrCanvas.toDataURL('image/png');
 
@@ -2422,15 +2417,15 @@
                 .replace(/\s+/g, ' ')
                 .trim();
 
-            // 1. Official Egyptian ID / License / Passport keywords (distinctive words only)
+            // Multi-character official Egyptian ID words (minimum 4+ chars to prevent random 3-letter noise from selfie backgrounds)
             const officialIdKeywords = [
-                'جمهوريه', 'مصر', 'العربيه', 'بطاقه', 'تحقيق', 'الشخصيه',
-                'الرقم', 'القومي', 'ذكر', 'انثي', 'مسلم', 'مسيحي',
+                'جمهوريه', 'العربيه', 'بطاقه', 'تحقيق', 'الشخصيه',
+                'الرقم', 'القومي', 'انثي', 'مسلم', 'مسيحي',
                 'اعزب', 'متزوج', 'متزوجه', 'القاهره', 'الجيزه', 'الاسكندريه',
                 'الدقهليه', 'الشرقيه', 'المنوفيه', 'القليوبيه', 'البحيره', 'الغربيه',
-                'اسيوط', 'سوهاج', 'قنا', 'اسوان', 'الاقصر', 'المنيا', 'بني سويف',
+                'اسيوط', 'سوهاج', 'اسوان', 'الاقصر', 'المنيا', 'بني سويف',
                 'الفيوم', 'السويس', 'الاسماعيليه', 'بورسعيد', 'دمياط', 'كفر الشيخ',
-                'مطروح', 'سيناء', 'البحر الاحمر', 'الوادي الجديد', 'مركز', 'قسم',
+                'مطروح', 'سيناء', 'البحر الاحمر', 'الوادي الجديد', 'مركز',
                 'ساريه', 'اصدار', 'رخصه', 'قياده', 'جواز', 'سفر'
             ];
 
@@ -2441,18 +2436,17 @@
                 }
             }
 
-            // 2. Egyptian National ID Number (14 digits starting with 2 or 3, allowing spaces between digits)
+            // 2. Egyptian National ID Number (14 digits starting with 2 or 3)
             const compactDigits = withWesternDigits.replace(/[^\d]/g, '');
             const hasEgyptian14DigitId = /[23]\d{13}/.test(compactDigits);
 
-            // 3. Egyptian ID bottom-left factory serial number (e.g. JM2015559)
+            // 3. Egyptian ID bottom-left factory serial number (2 letters + 7 digits, e.g. JM2015559)
             const compactAlphaNum = withWesternDigits.replace(/[^A-Za-z0-9]/g, '');
             const hasEgyptianSerialCode = /[A-Za-z]{2}\d{7}/.test(compactAlphaNum);
 
-            // Strict validation: must match at least one real Egyptian ID fingerprint
-            // (Does NOT accept random background noise or selfie photos)
+            // Require EITHER at least 2 distinct official ID words OR the 14-digit National ID OR the factory serial code
             const isValidId =
-                matchedKeywords >= 1 ||
+                matchedKeywords >= 2 ||
                 hasEgyptian14DigitId ||
                 hasEgyptianSerialCode;
 
@@ -3014,6 +3008,3 @@
     </script>
 </body>
 </html>
-```
-
-انسخ الكود الجديد من تبويب **Code** وحدّث به ملف `index.html` على GitHub؛ الآن سيرفض أي صورة سيلفي فوراً ولن يقبل إلا صورة تحتوي على بيانات البطاقة الشخصية المصرية (سواء كانت البطاقة تملأ الكادر أو جزءاً منه).
