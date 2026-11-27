@@ -289,39 +289,39 @@
                         </div>
                     </div>
 
-                    <!-- Interactive Map Route Selector -->
-                    <div class="space-y-3">
-                        <div class="flex flex-wrap items-center justify-between gap-2">
-                            <label class="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
-                                <i class="fa-solid fa-map-location-dot text-emerald-600"></i>
-                                حدد مسار الرحلة على الخريطة (البداية والنهاية)
-                            </label>
-                            <div class="flex flex-wrap items-center gap-1.5">
-                                <button type="button" id="btn-pick-start" onclick="setMapPickMode('start')"
-                                    class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-emerald-600 text-white shadow-sm transition">
-                                    <i class="fa-solid fa-play ml-1"></i>تحديد البداية
-                                </button>
-                                <button type="button" id="btn-pick-end" onclick="setMapPickMode('end')"
-                                    class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-100 text-slate-700 hover:bg-slate-200 transition">
-                                    <i class="fa-solid fa-flag-checkered ml-1"></i>تحديد النهاية
-                                </button>
-                                <button type="button" onclick="useCurrentGpsForStart()"
-                                    class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 transition">
-                                    <i class="fa-solid fa-crosshairs ml-1"></i>موقعي (GPS)
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Quick Presets & Text Labels -->
+                        <!-- Quick Presets & Smart Place Search -->
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div class="space-y-1.5">
-                                <input type="text" id="d-start-name" required placeholder="اسم نقطة البداية (مثال: الشيخ زايد)"
-                                    class="w-full px-3.5 py-2 rounded-xl border border-emerald-200 bg-emerald-50/40 text-xs font-bold focus:outline-none focus:border-emerald-500">
+                            <div class="space-y-1.5 relative" id="start-search-wrapper">
+                                <div class="relative">
+                                    <input type="text" id="d-start-name" required autocomplete="off"
+                                        oninput="handlePlaceSearchInput('start', this.value)"
+                                        onfocus="handlePlaceSearchInput('start', this.value)"
+                                        placeholder="ابحث عن نقطة البداية (مثال: الشيخ زايد، ساي فيجن...)"
+                                        class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50/40 text-xs font-bold focus:outline-none focus:border-emerald-500">
+                                    <button type="button" onclick="triggerInstantPlaceSearch('start')" title="بحث عن المكان"
+                                        class="absolute left-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-[11px] hover:bg-emerald-700 transition">
+                                        <i id="start-search-icon" class="fa-solid fa-magnifying-glass"></i>
+                                    </button>
+                                </div>
+                                <!-- Autocomplete Dropdown for Start -->
+                                <div id="start-search-results" class="hidden absolute right-0 left-0 top-10 z-[35] bg-white rounded-2xl shadow-xl border border-slate-200 max-h-56 overflow-y-auto divide-y divide-slate-100"></div>
                                 <div class="flex flex-wrap gap-1" id="quick-start-presets"></div>
                             </div>
-                            <div class="space-y-1.5">
-                                <input type="text" id="d-end-name" required placeholder="اسم نقطة النهاية (مثال: التجمع الخامس)"
-                                    class="w-full px-3.5 py-2 rounded-xl border border-rose-200 bg-rose-50/40 text-xs font-bold focus:outline-none focus:border-rose-500">
+
+                            <div class="space-y-1.5 relative" id="end-search-wrapper">
+                                <div class="relative">
+                                    <input type="text" id="d-end-name" required autocomplete="off"
+                                        oninput="handlePlaceSearchInput('end', this.value)"
+                                        onfocus="handlePlaceSearchInput('end', this.value)"
+                                        placeholder="ابحث عن نقطة النهاية (مثال: شركة ساي فيجن، التجمع...)"
+                                        class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-rose-200 bg-rose-50/40 text-xs font-bold focus:outline-none focus:border-rose-500">
+                                    <button type="button" onclick="triggerInstantPlaceSearch('end')" title="بحث عن المكان"
+                                        class="absolute left-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg bg-rose-600 text-white flex items-center justify-center text-[11px] hover:bg-rose-700 transition">
+                                        <i id="end-search-icon" class="fa-solid fa-magnifying-glass"></i>
+                                    </button>
+                                </div>
+                                <!-- Autocomplete Dropdown for End -->
+                                <div id="end-search-results" class="hidden absolute right-0 left-0 top-10 z-[35] bg-white rounded-2xl shadow-xl border border-slate-200 max-h-56 overflow-y-auto divide-y divide-slate-100"></div>
                                 <div class="flex flex-wrap gap-1" id="quick-end-presets"></div>
                             </div>
                         </div>
@@ -1549,6 +1549,210 @@
                     class="px-2 py-0.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 text-[10px] font-bold border border-rose-200/70 transition">${loc.name}</button>
             `).join('');
         }
+
+        // ==========================================================
+        // 6B. SMART PLACE AUTOCOMPLETE SEARCH (EGYPT COMPANIES & LANDMARKS)
+        // ==========================================================
+        const KNOWN_EGYPT_PLACES = [
+            { name: 'شركة ساي فيجن (Si-Vision) - القرية الذكية', subtitle: 'القرية الذكية، طريق مصر الإسكندرية الصحراوي، الجيزة', coords: [30.0736, 31.0188] },
+            { name: 'شركة ساي فيجن (Si-Vision) - مصر الجديدة / شيراتون', subtitle: 'مساكن شيراتون، النزهة، القاهرة', coords: [30.1065, 31.3752] },
+            { name: 'القرية الذكية (Smart Village)', subtitle: 'الكيلو 28 طريق مصر الإسكندرية الصحراوي، الجيزة', coords: [30.0715, 31.0169] },
+            { name: 'الشيخ زايد - هايبر وان', subtitle: 'محور 26 يوليو، الشيخ زايد، الجيزة', coords: [30.0444, 30.9850] },
+            { name: 'مول العرب - 6 أكتوبر', subtitle: 'ميدان جهينة، 6 أكتوبر، الجيزة', coords: [30.0069, 30.9735] },
+            { name: 'مول مصر - 6 أكتوبر', subtitle: 'طريق الواحات، 6 أكتوبر، الجيزة', coords: [29.9723, 31.0163] },
+            { name: 'التجمع الخامس - شارع التسعين', subtitle: 'القاهرة الجديدة، القاهرة', coords: [30.0074, 31.4913] },
+            { name: 'كايرو فيستيفال سيتي (CFC)', subtitle: 'التجمع الخامس، القاهرة الجديدة', coords: [30.0286, 31.4083] },
+            { name: 'المعادي - شارع النصر', subtitle: 'المعادي، القاهرة', coords: [29.9602, 31.2569] },
+            { name: 'القرية التكنولوجية بالمعادي', subtitle: 'المعادي الجديدة، القاهرة', coords: [29.9739, 31.2825] },
+            { name: 'مدينة نصر - عباس العقاد', subtitle: 'مدينة نصر، القاهرة', coords: [30.0561, 31.3372] },
+            { name: 'المهندسين - ميدان لبنان', subtitle: 'المهندسين، الجيزة', coords: [30.0642, 31.1923] },
+            { name: 'الدقي - ميدان المساحة', subtitle: 'الدقي، الجيزة', coords: [30.0385, 31.2119] },
+            { name: 'مطار القاهرة الدولي', subtitle: 'النزهة، القاهرة', coords: [30.1119, 31.4139] },
+            { name: 'العاصمة الإدارية الجديدة - الحي الحكومي', subtitle: 'العاصمة الإدارية الجديدة', coords: [30.0156, 31.7444] }
+        ];
+
+        const placeSearchTimers = { start: null, end: null };
+
+        function handlePlaceSearchInput(type, rawQuery) {
+            const query = String(rawQuery || '').trim();
+            const resultsBox = document.getElementById(`${type}-search-results`);
+            if (!resultsBox) return;
+
+            if (placeSearchTimers[type]) {
+                clearTimeout(placeSearchTimers[type]);
+            }
+
+            if (query.length < 2) {
+                resultsBox.classList.add('hidden');
+                return;
+            }
+
+            // Instant local matches first
+            const qLower = query.toLowerCase();
+            const localMatches = KNOWN_EGYPT_PLACES.filter(p =>
+                p.name.toLowerCase().includes(qLower) || p.subtitle.toLowerCase().includes(qLower)
+            );
+
+            renderPlaceSearchDropdown(type, localMatches, true);
+
+            // Debounced live search via OpenStreetMap Nominatim + Photon (Egypt)
+            placeSearchTimers[type] = setTimeout(() => {
+                fetchRemotePlacesEgypt(type, query, localMatches);
+            }, 350);
+        }
+
+        function triggerInstantPlaceSearch(type) {
+            const input = document.getElementById(`d-${type}-name`);
+            if (!input) return;
+            const query = input.value.trim();
+            if (query.length < 2) {
+                showToast('اكتب اسم المكان أو الشركة أولاً للبحث', 'info');
+                input.focus();
+                return;
+            }
+            const qLower = query.toLowerCase();
+            const localMatches = KNOWN_EGYPT_PLACES.filter(p =>
+                p.name.toLowerCase().includes(qLower) || p.subtitle.toLowerCase().includes(qLower)
+            );
+            renderPlaceSearchDropdown(type, localMatches, true);
+            fetchRemotePlacesEgypt(type, query, localMatches);
+        }
+
+        async function fetchRemotePlacesEgypt(type, query, localMatches) {
+            const icon = document.getElementById(`${type}-search-icon`);
+            if (icon) icon.className = 'fa-solid fa-spinner fa-spin';
+
+            const combined = [...localMatches];
+            const addUniquePlace = (name, subtitle, lat, lon) => {
+                if (!name || isNaN(lat) || isNaN(lon)) return;
+                const isDup = combined.some(item =>
+                    Math.abs(item.coords[0] - lat) < 0.0015 && Math.abs(item.coords[1] - lon) < 0.0015
+                );
+                if (!isDup) {
+                    combined.push({
+                        name,
+                        subtitle: subtitle || 'مصر',
+                        coords: [Number(lat.toFixed(5)), Number(lon.toFixed(5))]
+                    });
+                }
+            };
+
+            try {
+                // 1. Nominatim Search restricted to Egypt (supports Arabic & English company/building names)
+                const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=eg&accept-language=ar,en&limit=6&addressdetails=1`;
+                const nomRes = await fetch(nomUrl);
+                if (nomRes.ok) {
+                    const nomData = await nomRes.json();
+                    for (const item of nomData) {
+                        const parts = (item.display_name || '').split(',').map(s => s.trim());
+                        const shortTitle = item.name || parts[0] || query;
+                        const sub = parts.slice(1, 4).join('، ');
+                        addUniquePlace(shortTitle, sub, parseFloat(item.lat), parseFloat(item.lon));
+                    }
+                }
+            } catch (e) {
+                console.warn('Nominatim search warning:', e);
+            }
+
+            try {
+                // 2. Photon Komoot API (great for POI & company names like Si-Vision / ساي فيجن)
+                if (combined.length < 5) {
+                    const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query + ' Egypt')}&lat=30.0444&lon=31.2357&limit=5`;
+                    const phRes = await fetch(photonUrl);
+                    if (phRes.ok) {
+                        const phData = await phRes.json();
+                        for (const feat of (phData.features || [])) {
+                            const props = feat.properties || {};
+                            const geom = feat.geometry?.coordinates || [];
+                            if (geom.length >= 2) {
+                                const title = props.name || props.street || query;
+                                const sub = [props.district, props.city, props.state].filter(Boolean).join('، ');
+                                addUniquePlace(title, sub, geom[1], geom[0]);
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Photon search warning:', e);
+            } finally {
+                if (icon) icon.className = 'fa-solid fa-magnifying-glass';
+            }
+
+            renderPlaceSearchDropdown(type, combined, false);
+        }
+
+        function renderPlaceSearchDropdown(type, places, isStillLoading) {
+            const box = document.getElementById(`${type}-search-results`);
+            if (!box) return;
+
+            if (places.length === 0 && !isStillLoading) {
+                box.innerHTML = `
+                    <div class="p-3 text-center text-xs font-bold text-slate-500">
+                        لم يتم العثور على نتائج مطابقة — جرب كتابة اسم أقرب منطقة أو اضغط على الخريطة
+                    </div>`;
+                box.classList.remove('hidden');
+                return;
+            }
+
+            if (places.length === 0 && isStillLoading) {
+                box.innerHTML = `
+                    <div class="p-3 text-center text-xs font-bold text-emerald-700">
+                        <i class="fa-solid fa-spinner fa-spin ml-1"></i> جاري البحث عن المكان في مصر...
+                    </div>`;
+                box.classList.remove('hidden');
+                return;
+            }
+
+            const pinColor = type === 'start' ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50';
+            box.innerHTML = places.map((p, idx) => `
+                <button type="button"
+                    onclick="selectSearchedPlace('${type}', ${idx})"
+                    data-place-name="${escapeHtml(p.name)}"
+                    data-place-lat="${p.coords[0]}"
+                    data-place-lng="${p.coords[1]}"
+                    id="${type}-place-opt-${idx}"
+                    class="w-full text-right px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5">
+                    <div class="w-7 h-7 rounded-xl ${pinColor} flex items-center justify-center shrink-0 mt-0.5 text-xs">
+                        <i class="fa-solid fa-location-dot"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="text-xs font-black text-slate-900 truncate">${escapeHtml(p.name)}</div>
+                        <div class="text-[10px] font-semibold text-slate-500 truncate">${escapeHtml(p.subtitle)}</div>
+                    </div>
+                </button>
+            `).join('') + (isStillLoading ? `
+                <div class="px-3 py-1.5 bg-slate-50 text-[10px] font-bold text-slate-400 text-center">
+                    <i class="fa-solid fa-spinner fa-spin ml-1"></i> جاري جلب المزيد من النتائج...
+                </div>` : '');
+
+            box.classList.remove('hidden');
+        }
+
+        function selectSearchedPlace(type, idx) {
+            const btn = document.getElementById(`${type}-place-opt-${idx}`);
+            const box = document.getElementById(`${type}-search-results`);
+            if (!btn) return;
+
+            const name = btn.getAttribute('data-place-name');
+            const lat = parseFloat(btn.getAttribute('data-place-lat'));
+            const lng = parseFloat(btn.getAttribute('data-place-lng'));
+
+            if (box) box.classList.add('hidden');
+            applyPresetLocation(type, name, lat, lng);
+            showToast(`تم تحديد ${type === 'start' ? 'نقطة البداية' : 'نقطة النهاية'}: ${name}`, 'success');
+        }
+
+        // Hide autocomplete dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            const startWrap = document.getElementById('start-search-wrapper');
+            const endWrap = document.getElementById('end-search-wrapper');
+            if (startWrap && !startWrap.contains(e.target)) {
+                document.getElementById('start-search-results')?.classList.add('hidden');
+            }
+            if (endWrap && !endWrap.contains(e.target)) {
+                document.getElementById('end-search-results')?.classList.add('hidden');
+            }
+        });
 
         function applyPresetLocation(type, name, lat, lng) {
             if (type === 'start') {
@@ -3085,6 +3289,9 @@
         window.setDirectionFilter = setDirectionFilter;
         window.resetDemoDataConfirm = resetDemoDataConfirm;
         window.applyPresetLocation = applyPresetLocation;
+        window.handlePlaceSearchInput = handlePlaceSearchInput;
+        window.triggerInstantPlaceSearch = triggerInstantPlaceSearch;
+        window.selectSearchedPlace = selectSearchedPlace;
         window.setDriverDirection = setDriverDirection;
         window.setDriverAC = setDriverAC;
         window.setMapPickMode = setMapPickMode;
