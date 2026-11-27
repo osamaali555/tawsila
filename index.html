@@ -266,6 +266,29 @@
                             <label class="block text-xs font-extrabold text-slate-700 mb-1.5">موديل العربية</label>
                             <input type="text" id="d-car-model" required placeholder="مثال: هيونداي إلنترا" value="هيونداي إلنترا CN7"
                                 class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold focus:outline-none focus:border-emerald-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">سنة التصنيع</label>
+                            <input type="number" id="d-car-year" required min="1995" max="2027" value="2023"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold focus:outline-none focus:border-emerald-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">حالة التكييف</label>
+                            <div class="grid grid-cols-2 gap-1.5 bg-white p-1 rounded-xl border border-slate-200">
+                                <button type="button" id="d-ac-yes" onclick="setDriverAC(true)"
+                                    class="py-2 rounded-lg text-xs font-extrabold bg-sky-600 text-white shadow-sm transition">
+                                    <i class="fa-solid fa-snowflake ml-1"></i>متاح
+                                </button>
+                                <button type="button" id="d-ac-no" onclick="setDriverAC(false)"
+                                    class="py-2 rounded-lg text-xs font-extrabold text-slate-500 transition">
+                                    غير متاح
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Interactive Map Route Selector -->
                     <div class="space-y-3">
                         <div class="flex flex-wrap items-center justify-between gap-2">
@@ -598,7 +621,7 @@
                                     <i class="fa-solid fa-id-card"></i>
                                 </div>
                                 <p class="text-xs font-extrabold text-slate-700">اضغط لرفع صورة البطاقة من المعرض أو التصوير بالكاميرا</p>
-                                <p class="text-[10px] font-semibold text-slate-400">يرجى إرفاق صورة واضحة للبطاقة الشخصية</p>
+                                <p class="text-[10px] font-semibold text-slate-400">يرجى إرفاق صورة واضحة للبطاقة الشخصية (بشكل أفقي)</p>
                             </div>
                             <div id="id-upload-preview-wrap" class="hidden space-y-2">
                                 <img id="id-upload-preview" src="" alt="صورة البطاقة" class="w-full h-36 object-cover rounded-xl border border-slate-200 shadow-sm">
@@ -820,6 +843,7 @@
             authRole: 'passenger',
             pendingIdPhotoDataUrl: '',
             pendingIdOcrImageUrl: '',
+            pendingIdAspect: 0,
             isVerifyingId: false,
             afterAuthCallback: null,
 
@@ -1017,7 +1041,24 @@
                 isCloudReady = true;
                 updateCloudBadge('connected');
 
-                // Start real-time listeners immediately without blocking on sequential reads
+                try {
+                    const sessionSnap = await getDoc(sessionDocRef());
+                    if (sessionSnap.exists()) {
+                        state.currentUser = sessionSnap.data();
+                    }
+                } catch (err) {
+                    console.warn('Could not load saved session:', err);
+                }
+
+                try {
+                    const initSnap = await getDoc(metaInitDocRef());
+                    if (!initSnap.exists()) {
+                        await seedDemoTripsToFirestore();
+                    }
+                } catch (err) {
+                    console.warn('Seed check warning:', err);
+                }
+
                 onSnapshot(
                     tripsCollectionRef(),
                     (snapshot) => {
@@ -1061,14 +1102,6 @@
                         console.error('Users sync error:', error);
                     }
                 );
-
-                // Load saved session in background
-                getDoc(sessionDocRef()).then((sessionSnap) => {
-                    if (sessionSnap.exists()) {
-                        state.currentUser = sessionSnap.data();
-                        renderAll();
-                    }
-                }).catch((err) => console.warn('Could not load saved session:', err));
             } catch (err) {
                 console.error('Firebase init failed:', err);
                 isCloudReady = false;
@@ -1558,6 +1591,527 @@
                     </div>
                 </div>`;
             }).join('');
+        }
+
+        // ==========================================================
+        // 6. DRIVER FORM, MAP & EDITING LOGIC
+        // ==========================================================
+        function initQuickLocationPresets() {
+            const startBox = document.getElementById('quick-start-presets');
+            const endBox = document.getElementById('quick-end-presets');
+            if (!startBox || !endBox) return;
+
+            startBox.innerHTML = PRESET_LOCATIONS.map(loc => `
+                <button type="button" onclick="applyPresetLocation('start', '${loc.name}', ${loc.coords[0]}, ${loc.coords[1]})"
+                    class="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-200/70 transition">${loc.name}</button>
+            `).join('');
+
+            endBox.innerHTML = PRESET_LOCATIONS.map(loc => `
+                <button type="button" onclick="applyPresetLocation('end', '${loc.name}', ${loc.coords[0]}, ${loc.coords[1]})"
+                    class="px-2 py-0.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 text-[10px] font-bold border border-rose-200/70 transition">${loc.name}</button>
+            `).join('');
+        }
+
+        // ==========================================================
+        // 6B. SMART PLACE AUTOCOMPLETE SEARCH (EGYPT COMPANIES & LANDMARKS)
+        // ==========================================================
+        const KNOWN_EGYPT_PLACES = [
+            { name: 'شركة ساي فيجن (Si-Vision) - القرية الذكية', subtitle: 'القرية الذكية، طريق مصر الإسكندرية الصحراوي، الجيزة', coords: [30.0736, 31.0188] },
+            { name: 'شركة ساي فيجن (Si-Vision) - مصر الجديدة / شيراتون', subtitle: 'مساكن شيراتون، النزهة، القاهرة', coords: [30.1065, 31.3752] },
+            { name: 'القرية الذكية (Smart Village)', subtitle: 'الكيلو 28 طريق مصر الإسكندرية الصحراوي، الجيزة', coords: [30.0715, 31.0169] },
+            { name: 'الشيخ زايد - هايبر وان', subtitle: 'محور 26 يوليو، الشيخ زايد، الجيزة', coords: [30.0444, 30.9850] },
+            { name: 'مول العرب - 6 أكتوبر', subtitle: 'ميدان جهينة، 6 أكتوبر، الجيزة', coords: [30.0069, 30.9735] },
+            { name: 'مول مصر - 6 أكتوبر', subtitle: 'طريق الواحات، 6 أكتوبر، الجيزة', coords: [29.9723, 31.0163] },
+            { name: 'التجمع الخامس - شارع التسعين', subtitle: 'القاهرة الجديدة، القاهرة', coords: [30.0074, 31.4913] },
+            { name: 'كايرو فيستيفال سيتي (CFC)', subtitle: 'التجمع الخامس، القاهرة الجديدة', coords: [30.0286, 31.4083] },
+            { name: 'المعادي - شارع النصر', subtitle: 'المعادي، القاهرة', coords: [29.9602, 31.2569] },
+            { name: 'القرية التكنولوجية بالمعادي', subtitle: 'المعادي الجديدة، القاهرة', coords: [29.9739, 31.2825] },
+            { name: 'مدينة نصر - عباس العقاد', subtitle: 'مدينة نصر، القاهرة', coords: [30.0561, 31.3372] },
+            { name: 'المهندسين - ميدان لبنان', subtitle: 'المهندسين، الجيزة', coords: [30.0642, 31.1923] },
+            { name: 'الدقي - ميدان المساحة', subtitle: 'الدقي، الجيزة', coords: [30.0385, 31.2119] },
+            { name: 'مطار القاهرة الدولي', subtitle: 'النزهة، القاهرة', coords: [30.1119, 31.4139] },
+            { name: 'العاصمة الإدارية الجديدة - الحي الحكومي', subtitle: 'العاصمة الإدارية الجديدة', coords: [30.0156, 31.7444] }
+        ];
+
+        const placeSearchTimers = { start: null, end: null };
+
+        function handlePlaceSearchInput(type, rawQuery) {
+            const query = String(rawQuery || '').trim();
+            const resultsBox = document.getElementById(`${type}-search-results`);
+            if (!resultsBox) return;
+
+            if (placeSearchTimers[type]) {
+                clearTimeout(placeSearchTimers[type]);
+            }
+
+            if (query.length < 2) {
+                resultsBox.classList.add('hidden');
+                return;
+            }
+
+            const qLower = query.toLowerCase();
+            const localMatches = KNOWN_EGYPT_PLACES.filter(p =>
+                p.name.toLowerCase().includes(qLower) || p.subtitle.toLowerCase().includes(qLower)
+            );
+
+            renderPlaceSearchDropdown(type, localMatches, true);
+
+            placeSearchTimers[type] = setTimeout(() => {
+                fetchRemotePlacesEgypt(type, query, localMatches);
+            }, 350);
+        }
+
+        function triggerInstantPlaceSearch(type) {
+            const input = document.getElementById(`d-${type}-name`);
+            if (!input) return;
+            const query = input.value.trim();
+            if (query.length < 2) {
+                showToast('اكتب اسم المكان أو الشركة أولاً للبحث', 'info');
+                input.focus();
+                return;
+            }
+            const qLower = query.toLowerCase();
+            const localMatches = KNOWN_EGYPT_PLACES.filter(p =>
+                p.name.toLowerCase().includes(qLower) || p.subtitle.toLowerCase().includes(qLower)
+            );
+            renderPlaceSearchDropdown(type, localMatches, true);
+            fetchRemotePlacesEgypt(type, query, localMatches);
+        }
+
+        async function fetchRemotePlacesEgypt(type, query, localMatches) {
+            const icon = document.getElementById(`${type}-search-icon`);
+            if (icon) icon.className = 'fa-solid fa-spinner fa-spin';
+
+            const combined = [...localMatches];
+            const addUniquePlace = (name, subtitle, lat, lon) => {
+                if (!name || isNaN(lat) || isNaN(lon)) return;
+                const isDup = combined.some(item =>
+                    Math.abs(item.coords[0] - lat) < 0.0015 && Math.abs(item.coords[1] - lon) < 0.0015
+                );
+                if (!isDup) {
+                    combined.push({
+                        name,
+                        subtitle: subtitle || 'مصر',
+                        coords: [Number(lat.toFixed(5)), Number(lon.toFixed(5))]
+                    });
+                }
+            };
+
+            try {
+                const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=eg&accept-language=ar,en&limit=6&addressdetails=1`;
+                const nomRes = await fetch(nomUrl);
+                if (nomRes.ok) {
+                    const nomData = await nomRes.json();
+                    for (const item of nomData) {
+                        const parts = (item.display_name || '').split(',').map(s => s.trim());
+                        const shortTitle = item.name || parts[0] || query;
+                        const sub = parts.slice(1, 4).join('، ');
+                        addUniquePlace(shortTitle, sub, parseFloat(item.lat), parseFloat(item.lon));
+                    }
+                }
+            } catch (e) {
+                console.warn('Nominatim search warning:', e);
+            }
+
+            try {
+                if (combined.length < 5) {
+                    const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query + ' Egypt')}&lat=30.0444&lon=31.2357&limit=5`;
+                    const phRes = await fetch(photonUrl);
+                    if (phRes.ok) {
+                        const phData = await phRes.json();
+                        for (const feat of (phData.features || [])) {
+                            const props = feat.properties || {};
+                            const geom = feat.geometry?.coordinates || [];
+                            if (geom.length >= 2) {
+                                const title = props.name || props.street || query;
+                                const sub = [props.district, props.city, props.state].filter(Boolean).join('، ');
+                                addUniquePlace(title, sub, geom[1], geom[0]);
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Photon search warning:', e);
+            } finally {
+                if (icon) icon.className = 'fa-solid fa-magnifying-glass';
+            }
+
+            renderPlaceSearchDropdown(type, combined, false);
+        }
+
+        function renderPlaceSearchDropdown(type, places, isStillLoading) {
+            const box = document.getElementById(`${type}-search-results`);
+            if (!box) return;
+
+            if (places.length === 0 && !isStillLoading) {
+                box.innerHTML = `
+                    <div class="p-3 text-center text-xs font-bold text-slate-500">
+                        لم يتم العثور على نتائج مطابقة — جرب كتابة اسم أقرب منطقة أو اضغط على الخريطة
+                    </div>`;
+                box.classList.remove('hidden');
+                return;
+            }
+
+            if (places.length === 0 && isStillLoading) {
+                box.innerHTML = `
+                    <div class="p-3 text-center text-xs font-bold text-emerald-700">
+                        <i class="fa-solid fa-spinner fa-spin ml-1"></i> جاري البحث عن المكان في مصر...
+                    </div>`;
+                box.classList.remove('hidden');
+                return;
+            }
+
+            const pinColor = type === 'start' ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50';
+            box.innerHTML = places.map((p, idx) => `
+                <button type="button"
+                    onclick="selectSearchedPlace('${type}', ${idx})"
+                    data-place-name="${escapeHtml(p.name)}"
+                    data-place-lat="${p.coords[0]}"
+                    data-place-lng="${p.coords[1]}"
+                    id="${type}-place-opt-${idx}"
+                    class="w-full text-right px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5">
+                    <div class="w-7 h-7 rounded-xl ${pinColor} flex items-center justify-center shrink-0 mt-0.5 text-xs">
+                        <i class="fa-solid fa-location-dot"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="text-xs font-black text-slate-900 truncate">${escapeHtml(p.name)}</div>
+                        <div class="text-[10px] font-semibold text-slate-500 truncate">${escapeHtml(p.subtitle)}</div>
+                    </div>
+                </button>
+            `).join('') + (isStillLoading ? `
+                <div class="px-3 py-1.5 bg-slate-50 text-[10px] font-bold text-slate-400 text-center">
+                    <i class="fa-solid fa-spinner fa-spin ml-1"></i> جاري جلب المزيد من النتائج...
+                </div>` : '');
+
+            box.classList.remove('hidden');
+        }
+
+        function selectSearchedPlace(type, idx) {
+            const btn = document.getElementById(`${type}-place-opt-${idx}`);
+            const box = document.getElementById(`${type}-search-results`);
+            if (!btn) return;
+
+            const name = btn.getAttribute('data-place-name');
+            const lat = parseFloat(btn.getAttribute('data-place-lat'));
+            const lng = parseFloat(btn.getAttribute('data-place-lng'));
+
+            if (box) box.classList.add('hidden');
+            applyPresetLocation(type, name, lat, lng);
+            showToast(`تم تحديد ${type === 'start' ? 'نقطة البداية' : 'نقطة النهاية'}: ${name}`, 'success');
+        }
+
+        document.addEventListener('click', (e) => {
+            const startWrap = document.getElementById('start-search-wrapper');
+            const endWrap = document.getElementById('end-search-wrapper');
+            if (startWrap && !startWrap.contains(e.target)) {
+                document.getElementById('start-search-results')?.classList.add('hidden');
+            }
+            if (endWrap && !endWrap.contains(e.target)) {
+                document.getElementById('end-search-results')?.classList.add('hidden');
+            }
+        });
+
+        function applyPresetLocation(type, name, lat, lng) {
+            if (type === 'start') {
+                state.driverStartCoords = [lat, lng];
+                document.getElementById('d-start-name').value = name;
+            } else {
+                state.driverEndCoords = [lat, lng];
+                document.getElementById('d-end-name').value = name;
+            }
+            updateDriverMapRoute();
+        }
+
+        function setDriverDirection(dir) {
+            state.driverDirection = dir;
+            const goBtn = document.getElementById('d-dir-go');
+            const retBtn = document.getElementById('d-dir-return');
+            if (dir === 'go') {
+                goBtn.className = 'py-2 rounded-lg text-xs font-extrabold bg-white text-emerald-700 shadow-sm transition';
+                retBtn.className = 'py-2 rounded-lg text-xs font-extrabold text-slate-600 transition';
+            } else {
+                retBtn.className = 'py-2 rounded-lg text-xs font-extrabold bg-white text-indigo-700 shadow-sm transition';
+                goBtn.className = 'py-2 rounded-lg text-xs font-extrabold text-slate-600 transition';
+            }
+        }
+
+        function setDriverAC(hasAC) {
+            state.driverAC = hasAC;
+            const yesBtn = document.getElementById('d-ac-yes');
+            const noBtn = document.getElementById('d-ac-no');
+            if (hasAC) {
+                yesBtn.className = 'py-2 rounded-lg text-xs font-extrabold bg-sky-600 text-white shadow-sm transition';
+                noBtn.className = 'py-2 rounded-lg text-xs font-extrabold text-slate-500 transition';
+            } else {
+                noBtn.className = 'py-2 rounded-lg text-xs font-extrabold bg-slate-700 text-white shadow-sm transition';
+                yesBtn.className = 'py-2 rounded-lg text-xs font-extrabold text-slate-500 transition';
+            }
+        }
+
+        function setMapPickMode(mode) {
+            state.mapPickMode = mode;
+            const startBtn = document.getElementById('btn-pick-start');
+            const endBtn = document.getElementById('btn-pick-end');
+            if (!startBtn || !endBtn) return;
+            if (mode === 'start') {
+                startBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold bg-emerald-600 text-white shadow-sm transition';
+                endBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-100 text-slate-700 hover:bg-slate-200 transition';
+            } else {
+                endBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold bg-rose-600 text-white shadow-sm transition';
+                startBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-100 text-slate-700 hover:bg-slate-200 transition';
+            }
+        }
+
+        function createPinIcon(color, iconClass) {
+            return L.divIcon({
+                className: '',
+                html: `<div class="custom-pin" style="width:30px;height:30px;background:${color};font-size:13px;"><i class="fa-solid ${iconClass}"></i></div>`,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            });
+        }
+
+        function initDriverMapIfNeeded() {
+            if (driverMap) return;
+            driverMap = L.map('driver-map').setView([30.0444, 31.2357], 10);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(driverMap);
+
+            driverMap.on('click', (e) => {
+                const coords = [Number(e.latlng.lat.toFixed(5)), Number(e.latlng.lng.toFixed(5))];
+                if (state.mapPickMode === 'start') {
+                    state.driverStartCoords = coords;
+                    if (!document.getElementById('d-start-name').value.trim()) {
+                        document.getElementById('d-start-name').value = `نقطة بداية (${coords[0]}, ${coords[1]})`;
+                    }
+                    setMapPickMode('end');
+                    showToast('تم تحديد نقطة البداية، اضغط الآن لتحديد النهاية', 'info');
+                } else {
+                    state.driverEndCoords = coords;
+                    if (!document.getElementById('d-end-name').value.trim()) {
+                        document.getElementById('d-end-name').value = `نقطة نهاية (${coords[0]}, ${coords[1]})`;
+                    }
+                    showToast('تم تحديد نقطة النهاية وجاري رسم المسار', 'success');
+                }
+                updateDriverMapRoute();
+            });
+
+            if (!document.getElementById('d-start-name').value) {
+                document.getElementById('d-start-name').value = 'الشيخ زايد';
+                document.getElementById('d-end-name').value = 'التجمع الخامس';
+            }
+            updateDriverMapRoute();
+        }
+
+        async function updateDriverMapRoute() {
+            if (!driverMap) return;
+            const start = state.driverStartCoords;
+            const end = state.driverEndCoords;
+
+            if (driverStartMarker) driverMap.removeLayer(driverStartMarker);
+            if (driverEndMarker) driverMap.removeLayer(driverEndMarker);
+            if (driverRouteLine) driverMap.removeLayer(driverRouteLine);
+
+            driverStartMarker = L.marker(start, { icon: createPinIcon('#059669', 'fa-play') }).addTo(driverMap);
+            driverEndMarker = L.marker(end, { icon: createPinIcon('#e11d48', 'fa-flag-checkered') }).addTo(driverMap);
+
+            const infoEl = document.getElementById('driver-route-info');
+            infoEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-emerald-600"></i> <span>جاري حساب أسهل مسار...</span>`;
+
+            try {
+                const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end[1]},${end[0]}?overview=full&geometries=geojson`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.routes && data.routes.length > 0) {
+                    const route = data.routes[0];
+                    state.driverRouteCoords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+                    state.driverDistanceKm = Math.max(1, Math.round(route.distance / 1000));
+                    state.driverDurationMin = Math.max(5, Math.round(route.duration / 60));
+                } else {
+                    throw new Error('No OSRM route');
+                }
+            } catch (err) {
+                state.driverRouteCoords = interpolateLine(start, end, 12);
+                const dist = haversineKm(start, end);
+                state.driverDistanceKm = Math.max(2, Math.round(dist * 1.25));
+                state.driverDurationMin = Math.max(10, Math.round(state.driverDistanceKm * 1.4));
+            }
+
+            driverRouteLine = L.polyline(state.driverRouteCoords, { color: '#059669', weight: 5, opacity: 0.85 }).addTo(driverMap);
+            driverMap.fitBounds(driverRouteLine.getBounds(), { padding: [30, 30] });
+
+            infoEl.innerHTML = `<i class="fa-solid fa-route text-emerald-600"></i> <span>${state.driverDistanceKm} كم • حوالي ${state.driverDurationMin} دقيقة</span>`;
+        }
+
+        function useCurrentGpsForStart() {
+            if (!navigator.geolocation) {
+                showToast('المتصفح لا يدعم تحديد الموقع (GPS)', 'error');
+                return;
+            }
+            showToast('جاري تحديد موقعك الحالي...', 'info');
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    state.driverStartCoords = [Number(pos.coords.latitude.toFixed(5)), Number(pos.coords.longitude.toFixed(5))];
+                    document.getElementById('d-start-name').value = 'موقعي الحالي (GPS)';
+                    updateDriverMapRoute();
+                    showToast('تم تحديد موقعك كنقطة بداية', 'success');
+                },
+                () => {
+                    showToast('تعذر الوصول للموقع، تأكد من تفعيل الـ GPS', 'error');
+                },
+                { enableHighAccuracy: true, timeout: 8000 }
+            );
+        }
+
+        async function handleDriverTripSubmit(e) {
+            e.preventDefault();
+
+            if (!state.currentUser) {
+                showToast('من فضلك سجل حسابك أولاً لنشر رحلة', 'info');
+                openAuthModal('register');
+                return;
+            }
+
+            if (!firebaseAuthUser) {
+                showToast('جاري الاتصال بالسحابة، حاول مرة أخرى بعد لحظة', 'error');
+                return;
+            }
+
+            const driverName = document.getElementById('d-driver-name').value.trim();
+            const time = document.getElementById('d-time').value;
+            const basePrice = Math.max(10, Number(document.getElementById('d-price').value) || 50);
+            const totalSeats = Number(document.getElementById('d-seats').value) || 3;
+            const carModel = document.getElementById('d-car-model').value.trim();
+            const carYear = Number(document.getElementById('d-car-year').value) || 2023;
+            const startName = document.getElementById('d-start-name').value.trim();
+            const endName = document.getElementById('d-end-name').value.trim();
+
+            const submitBtn = document.getElementById('driver-submit-btn');
+            submitBtn.disabled = true;
+
+            try {
+                if (state.editingTripId) {
+                    const trip = state.trips.find(t => t.id === state.editingTripId);
+                    if (!trip) return;
+                    const alreadyBooked = getBookedSeatsCount(trip);
+                    if (totalSeats < alreadyBooked) {
+                        showToast(`لا يمكن تقليل الكراسي لأقل من ${alreadyBooked} (يوجد ركاب حاجزون بالفعل)`, 'error');
+                        return;
+                    }
+                    const updatedTrip = {
+                        ...trip,
+                        direction: state.driverDirection,
+                        driverName,
+                        time,
+                        basePrice,
+                        totalSeats,
+                        carModel,
+                        carYear,
+                        hasAC: state.driverAC,
+                        startName,
+                        endName,
+                        startCoords: [...state.driverStartCoords],
+                        endCoords: [...state.driverEndCoords],
+                        routeCoords: state.driverRouteCoords.length > 1 ? [...state.driverRouteCoords] : interpolateLine(state.driverStartCoords, state.driverEndCoords, 10),
+                        distanceKm: state.driverDistanceKm,
+                        durationMin: state.driverDurationMin
+                    };
+                    await setDoc(tripDocRef(trip.id), serializeTripForFirestore(updatedTrip));
+                    cancelEditTrip();
+                    switchDriverTab('my-trips');
+                    showToast('تم حفظ تعديلات الرحلة ومزامنتها فوراً للجميع', 'success');
+                } else {
+                    const newTrip = {
+                        id: 'trip-' + Date.now(),
+                        direction: state.driverDirection,
+                        driverName,
+                        driverUserId: state.currentUser.id,
+                        driverPhone: state.currentUser.phone,
+                        time,
+                        basePrice,
+                        totalSeats,
+                        carModel,
+                        carYear,
+                        hasAC: state.driverAC,
+                        startName,
+                        endName,
+                        startCoords: [...state.driverStartCoords],
+                        endCoords: [...state.driverEndCoords],
+                        routeCoords: state.driverRouteCoords.length > 1 ? [...state.driverRouteCoords] : interpolateLine(state.driverStartCoords, state.driverEndCoords, 10),
+                        distanceKm: state.driverDistanceKm,
+                        durationMin: state.driverDurationMin,
+                        createdAt: Date.now(),
+                        bookings: []
+                    };
+                    await setDoc(tripDocRef(newTrip.id), serializeTripForFirestore(newTrip));
+                    await upgradeUserRoleIfNeeded(state.currentUser, 'driver');
+                    switchDriverTab('my-trips');
+                    showToast('تم نشر الرحلة بنجاح وظهرت الآن لجميع الركاب', 'success');
+                }
+            } catch (err) {
+                console.error('Save trip error:', err);
+                showToast('حدث خطأ أثناء حفظ الرحلة على السحابة', 'error');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        }
+
+        function startEditTrip(tripId) {
+            const trip = state.trips.find(t => t.id === tripId);
+            if (!trip) return;
+
+            state.editingTripId = trip.id;
+            setDriverDirection(trip.direction);
+            setDriverAC(trip.hasAC);
+            document.getElementById('d-driver-name').value = trip.driverName;
+            document.getElementById('d-time').value = trip.time;
+            document.getElementById('d-price').value = trip.basePrice;
+            document.getElementById('d-seats').value = String(trip.totalSeats);
+            document.getElementById('d-car-model').value = trip.carModel;
+            document.getElementById('d-car-year').value = trip.carYear;
+            document.getElementById('d-start-name').value = trip.startName;
+            document.getElementById('d-end-name').value = trip.endName;
+
+            state.driverStartCoords = [...trip.startCoords];
+            state.driverEndCoords = [...trip.endCoords];
+            state.driverRouteCoords = [...trip.routeCoords];
+
+            document.getElementById('driver-form-title').textContent = 'تعديل بيانات الرحلة';
+            document.getElementById('d-tab-create-label').textContent = 'تعديل الرحلة';
+            document.getElementById('driver-submit-btn').innerHTML = `<i class="fa-solid fa-floppy-disk"></i><span>حفظ التعديلات</span>`;
+            document.getElementById('btn-cancel-edit').classList.remove('hidden');
+
+            switchDriverTab('create');
+            setTimeout(() => {
+                initDriverMapIfNeeded();
+                updateDriverMapRoute();
+            }, 150);
+        }
+
+        function cancelEditTrip() {
+            state.editingTripId = null;
+            document.getElementById('driver-form-title').textContent = 'نشر خط سير يومي جديد';
+            document.getElementById('d-tab-create-label').textContent = 'إضافة رحلة جديدة';
+            document.getElementById('driver-submit-btn').innerHTML = `<i class="fa-solid fa-paper-plane"></i><span>نشر الرحلة الآن</span>`;
+            document.getElementById('btn-cancel-edit').classList.add('hidden');
+        }
+
+        function deleteTripConfirm(tripId) {
+            openConfirmModal(
+                'حذف الرحلة',
+                'هل أنت متأكد من حذف هذه الرحلة وإلغاء جميع الحجوزات المرتبطة بها؟',
+                async () => {
+                    if (!firebaseAuthUser) return;
+                    try {
+                        await deleteDoc(tripDocRef(tripId));
+                        showToast('تم حذف الرحلة بنجاح', 'info');
+                    } catch (err) {
+                        console.error('Delete trip error:', err);
+                        showToast('تعذر حذف الرحلة، حاول مرة أخرى', 'error');
+                    }
+                }
+            );
         }
 
         // ==========================================================
@@ -2183,6 +2737,8 @@
                 const img = new Image();
                 img.onload = () => {
                     try {
+                        state.pendingIdAspect = img.width / img.height;
+
                         const thumbWidth = 520;
                         const thumbScale = Math.min(1, thumbWidth / img.width);
                         const thumbCanvas = document.createElement('canvas');
@@ -2239,79 +2795,112 @@
             if (box) box.classList.add('hidden');
         }
 
-        async function verifyIdCardLocallyWithOCR(ocrImageUrl, onProgress) {
-            const TesseractLib = await ensureTesseractLoaded();
+        // ---------- ID VERIFICATION (SCORING-BASED) ----------
+        const EGY_GOV_CODES = new Set([
+            '01','02','03','04','11','12','13','14','15','16','17','18','19',
+            '21','22','23','24','25','26','27','28','29','31','32','33','34','35','88'
+        ]);
 
+        function toWesternDigits(str) {
+            return String(str || '')
+                .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+                .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+        }
+
+        function validateEgyptianNationalId(id) {
+            if (!/^[23]\d{13}$/.test(id)) return null;
+
+            const century = id[0] === '2' ? 1900 : 2000;
+            const year = century + Number(id.slice(1, 3));
+            const month = Number(id.slice(3, 5));
+            const day = Number(id.slice(5, 7));
+            const gov = id.slice(7, 9);
+
+            const birth = new Date(year, month - 1, day);
+            const validDate =
+                birth.getFullYear() === year &&
+                birth.getMonth() === month - 1 &&
+                birth.getDate() === day &&
+                birth <= new Date();
+            if (!validDate) return null;
+            if (!EGY_GOV_CODES.has(gov)) return null;
+
+            const now = new Date();
+            let age = now.getFullYear() - year;
+            if (now < new Date(now.getFullYear(), month - 1, day)) age--;
+
+            return { nationalId: id, birthDate: birth, age, gender: Number(id[12]) % 2 === 1 ? 'male' : 'female' };
+        }
+
+        function findEgyptianNationalId(text) {
+            const candidates = text.match(/[23](?:[\s.\-]?\d){13}/g) || [];
+            for (const c of candidates) {
+                const parsed = validateEgyptianNationalId(c.replace(/\D/g, ''));
+                if (parsed) return parsed;
+            }
+            return null;
+        }
+
+        async function verifyIdCardLocallyWithOCR(ocrImageUrl, onProgress, imageAspect) {
+            if (typeof imageAspect === 'number' && imageAspect > 0 && (imageAspect < 1.25 || imageAspect > 2.1)) {
+                return {
+                    isIdCard: false,
+                    reason: 'شكل الصورة لا يطابق البطاقة الشخصية. صوّر البطاقة بشكل أفقي وبحيث تملأ الصورة.'
+                };
+            }
+
+            const TesseractLib = await ensureTesseractLoaded();
             const result = await TesseractLib.recognize(ocrImageUrl, 'ara+eng', {
                 logger: (m) => {
                     if (m.status === 'recognizing text' && typeof onProgress === 'function') {
-                        const pct = Math.round((m.progress || 0) * 100);
-                        onProgress(pct);
+                        onProgress(Math.round((m.progress || 0) * 100));
                     }
                 }
             });
 
             const rawText = result?.data?.text || '';
-            const arabicIndic = '٠١٢٣٤٥٦٧٨٩';
-            const withWesternDigits = String(rawText)
-                .replace(/[٠-٩]/g, d => String(arabicIndic.indexOf(d)));
+            const westernText = toWesternDigits(rawText);
 
-            const normalizedText = withWesternDigits
+            const normalized = westernText
                 .replace(/[أإآ]/g, 'ا')
                 .replace(/ة/g, 'ه')
                 .replace(/ى/g, 'ي')
                 .replace(/\s+/g, ' ')
                 .trim();
 
-            const officialIdPhrases = [
-                'جمهوريه مصر',
-                'مصر العربيه',
-                'بطاقه تحقيق',
-                'تحقيق الشخصيه',
-                'الرقم القومي',
-                'رخصه قياده',
-                'جواز سفر'
-            ];
+            let score = 0;
 
-            const officialIdLongWords = [
-                'جمهوريه', 'العربيه', 'بطاقه', 'تحقيق', 'الشخصيه',
-                'القومي', 'مسيحي', 'متزوجه', 'القاهره', 'الجيزه',
-                'الاسكندريه', 'الدقهليه', 'الشرقيه', 'المنوفيه',
-                'القليوبيه', 'البحيره', 'الغربيه', 'الاسماعيليه',
-                'بورسعيد', 'كفر الشيخ', 'الوادي الجديد'
-            ];
+            const idInfo = findEgyptianNationalId(westernText);
+            if (idInfo) score += 3;
 
-            const hasOfficialPhrase = officialIdPhrases.some(p => normalizedText.includes(p));
+            const phrases = ['جمهوريه مصر', 'مصر العربيه', 'بطاقه تحقيق', 'تحقيق الشخصيه', 'الرقم القومي'];
+            const phraseHits = phrases.filter(p => normalized.includes(p)).length;
+            score += Math.min(phraseHits, 2) * 2;
 
-            let matchedLongWords = 0;
-            for (const w of officialIdLongWords) {
-                if (normalizedText.includes(w)) {
-                    matchedLongWords++;
-                }
-            }
+            const words = ['جمهوريه', 'العربيه', 'بطاقه', 'تحقيق', 'الشخصيه', 'القومي', 'مسلم', 'مسيحي', 'الديانه', 'الوظيفه'];
+            const wordHits = words.filter(w => normalized.includes(w)).length;
+            score += Math.min(wordHits, 3);
 
-            const compactDigits = withWesternDigits.replace(/[^\d]/g, '');
-            const hasEgyptian14DigitId = /[23]\d{13}/.test(compactDigits);
+            const compact = westernText.replace(/[^A-Za-z0-9]/g, '');
+            if (/[A-Z]{2}\d{7}/.test(compact)) score += 1;
 
-            const compactAlphaNum = withWesternDigits.replace(/[^A-Za-z0-9]/g, '');
-            const hasEgyptianSerialCode = /[A-Z]{2}\d{7}/.test(compactAlphaNum);
-
-            const isValidId =
-                hasOfficialPhrase ||
-                matchedLongWords >= 2 ||
-                hasEgyptian14DigitId ||
-                hasEgyptianSerialCode;
-
-            if (!isValidId) {
+            if (score < 3) {
                 return {
                     isIdCard: false,
-                    reason: 'الصورة المرفقة ليست بطاقة شخصية مصرية (يرجى رفع صورة واضحة للبطاقة الشخصية وليس صورة شخصية أو صورة عادية).'
+                    reason: 'لم نتمكن من التعرف على بطاقة شخصية مصرية في الصورة. صوّر الوجه الأمامي للبطاقة بإضاءة جيدة ومن غير انعكاس.'
                 };
+            }
+
+            if (idInfo && idInfo.age < 18) {
+                return { isIdCard: false, reason: 'يجب أن يكون عمرك 18 سنة أو أكثر لاستخدام التطبيق.' };
             }
 
             return {
                 isIdCard: true,
-                reason: 'تم قراءة بيانات البطاقة الشخصية بنجاح'
+                reason: 'تم التحقق من البطاقة الشخصية',
+                nationalId: idInfo?.nationalId || null,
+                age: idInfo?.age ?? null,
+                score
             };
         }
 
@@ -2363,7 +2952,7 @@
                 try {
                     const verification = await verifyIdCardLocallyWithOCR(state.pendingIdOcrImageUrl, (pct) => {
                         showIdVerifyStatus('loading', `جاري فحص وقراءة بيانات البطاقة... (${pct}%)`);
-                    });
+                    }, state.pendingIdAspect);
 
                     if (!verification.isIdCard) {
                         showIdVerifyStatus('error', escapeHtml(verification.reason));
@@ -2391,6 +2980,7 @@
                     role: state.authRole || 'passenger',
                     idPhoto: state.pendingIdPhotoDataUrl,
                     verified: true,
+                    idVersion: 2,
                     createdAt: Date.now()
                 };
 
@@ -2413,14 +3003,12 @@
                     return;
                 }
 
-                // Verify password
                 if (existing.passwordHash) {
                     if (existing.passwordHash !== passwordHash) {
                         showToast('كلمة المرور غير صحيحة، تأكد منها وحاول مرة أخرى', 'error');
                         return;
                     }
                 } else {
-                    // Legacy account without password: set this password now for security
                     existing.passwordHash = passwordHash;
                     if (firebaseAuthUser) {
                         try {
@@ -2437,6 +3025,7 @@
             state.currentUser = authenticatedUser;
             state.pendingIdPhotoDataUrl = '';
             state.pendingIdOcrImageUrl = '';
+            state.pendingIdAspect = 0;
             hideIdVerifyStatus();
 
             if (firebaseAuthUser) {
@@ -2627,6 +3216,9 @@
                 const waPhone = u.phone ? '2' + u.phone : '';
                 const safeName = escapeHtml(u.name || 'بدون اسم');
                 const safePhone = escapeHtml(u.phone || '');
+                const legacyBadge = u.idVersion === 2
+                    ? ''
+                    : `<span class="bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full text-[10px] font-black" title="تم التسجيل قبل تفعيل الفحص الصارم للبطاقة">تحقق قديم</span>`;
 
                 return `
                 <div class="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between gap-3">
@@ -2635,6 +3227,7 @@
                             <div class="flex items-center gap-2 flex-wrap">
                                 <h4 class="text-sm font-black text-slate-900">${safeName}</h4>
                                 ${getRoleBadgeHtml(u.role)}
+                                ${legacyBadge}
                             </div>
                             <div class="flex items-center gap-2 text-xs font-extrabold text-slate-700">
                                 <i class="fa-solid fa-phone text-emerald-600"></i>
@@ -2807,7 +3400,7 @@
                 cumulativeBefore += segLens[i];
             }
 
-            const ratio = Math.max(0.1, Math.min(1.0, Number((bestCumulative / totalLen).toFixed(2))));
+            const ratio = Math.max(0.0, Math.min(1.0, Number((bestCumulative / totalLen).toFixed(2))));
             return { coords: bestPoint, ratio };
         }
 
