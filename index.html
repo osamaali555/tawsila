@@ -2377,13 +2377,10 @@
 
         /**
          * Uses Gemini Vision API strictly to verify that the uploaded image is a real ID card.
-         * Passes the Service-Account-bound key via ?key=API_KEY as instructed by Google Cloud.
+         * Supports both query parameter and header authentication for Google AI Studio keys.
          */
         async function verifyIdCardOnlyWithGemini(base64Image) {
-            const geminiKey = "AQ.Ab8RN6JiuITv0VxsSgP14QGKSfAYnSNf8IRKCCvM9FuEFrHnBw";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(geminiKey)}`;
-
-            const headers = { "Content-Type": "application/json" };
+            const geminiKey = "AQ.Ab8RN6JbzN0ATIGD-5JhX_th7WDN4mTkpU8mSyUioAsPTvgLTg";
 
             const prompt = `أنت نظام تحقق صارم من الهوية لتطبيق مصري لمشاركة الركوب (توصيلة).
 قم بفحص الصورة المرفقة بدقة للتأكد من نوعها:
@@ -2421,26 +2418,46 @@
                 }
             };
 
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(payload)
-            });
+            const endpoints = [
+                {
+                    url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(geminiKey)}`,
+                    headers: { "Content-Type": "application/json" }
+                },
+                {
+                    url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
+                    headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey }
+                }
+            ];
 
-            if (!response.ok) {
-                let errDetail = 'HTTP ' + response.status;
+            let lastError = null;
+            for (const ep of endpoints) {
                 try {
-                    const errJson = await response.json();
-                    if (errJson?.error?.message) errDetail = errJson.error.message;
-                } catch (_) {}
-                throw new Error(errDetail);
+                    const response = await fetch(ep.url, {
+                        method: 'POST',
+                        headers: ep.headers,
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        let errDetail = 'HTTP ' + response.status;
+                        try {
+                            const errJson = await response.json();
+                            if (errJson?.error?.message) errDetail = errJson.error.message;
+                        } catch (_) {}
+                        throw new Error(errDetail);
+                    }
+
+                    const result = await response.json();
+                    const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!jsonText) throw new Error('استجابة فارغة من خادم التحقق');
+
+                    return JSON.parse(jsonText);
+                } catch (err) {
+                    lastError = err;
+                }
             }
 
-            const result = await response.json();
-            const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!jsonText) throw new Error('استجابة فارغة من خادم التحقق');
-
-            return JSON.parse(jsonText);
+            throw lastError || new Error('تعذر الاتصال بخادم التحقق');
         }
 
         async function handleAuthFormSubmit(e) {
