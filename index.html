@@ -20,6 +20,9 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+    <!-- Tesseract.js Local OCR (Arabic + English) for ID Card Verification -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
     <style>
         body {
             font-family: 'Cairo', sans-serif;
@@ -574,7 +577,7 @@
                             </div>
                         </label>
                         <input type="file" id="auth-id-input" accept="image/*" class="hidden" onchange="handleIdPhotoUpload(event)">
-                        <!-- AI ID Verification Status Box -->
+                        <!-- Smart ID Verification Status Box -->
                         <div id="id-verify-status" class="hidden mt-2 rounded-xl px-3 py-2 text-xs font-bold border"></div>
                     </div>
 
@@ -713,12 +716,11 @@
     <!-- ==================== TOAST NOTIFICATION ==================== -->
     <div id="toast-container" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] flex flex-col gap-2 w-[90%] max-w-sm pointer-events-none"></div>
 
-    <!-- ==================== APPLICATION JAVASCRIPT (FIREBASE + FIREBASE AI SDK) ==================== -->
+    <!-- ==================== APPLICATION JAVASCRIPT (FIREBASE + LOCAL OCR ID VERIFIER) ==================== -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAI, getGenerativeModel, GoogleAIBackend, Schema } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-ai.js";
 
         // ==========================================================
         // 0. FIREBASE INITIALIZATION & REAL-TIME SYNC SETUP
@@ -742,7 +744,6 @@
         let firebaseApp = null;
         let db = null;
         let auth = null;
-        let firebaseAI = null;
         let firebaseAuthUser = null;
         let isCloudReady = false;
 
@@ -789,9 +790,7 @@
             authMode: 'register', // 'register' | 'login'
             authRole: 'passenger', // 'passenger' | 'driver' | 'both'
             pendingIdPhotoDataUrl: '',
-            pendingIdPhotoOcrBase64: '',
-            pendingIdWidth: 0,
-            pendingIdHeight: 0,
+            pendingIdOcrImageUrl: '',
             isVerifyingId: false,
             afterAuthCallback: null,
 
@@ -979,11 +978,6 @@
                 firebaseApp = initializeApp(firebaseConfig);
                 db = getFirestore(firebaseApp);
                 auth = getAuth(firebaseApp);
-                try {
-                    firebaseAI = getAI(firebaseApp, { backend: new GoogleAIBackend() });
-                } catch (aiInitErr) {
-                    console.warn('Firebase AI init notice:', aiInitErr);
-                }
 
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     const cred = await signInWithCustomToken(auth, __initial_auth_token);
@@ -2192,7 +2186,7 @@
         }
 
         // ==========================================================
-        // 9. USER ACCOUNT, EGYPTIAN PHONE VALIDATION & ID UPLOAD
+        // 9. USER ACCOUNT, EGYPTIAN PHONE VALIDATION & LOCAL OCR ID CHECK
         // ==========================================================
         function normalizePhoneDigits(raw) {
             const arabicIndic = '٠١٢٣٤٥٦٧٨٩';
@@ -2324,26 +2318,27 @@
                 const img = new Image();
                 img.onload = () => {
                     try {
-                        state.pendingIdWidth = img.naturalWidth || img.width || 600;
-                        state.pendingIdHeight = img.naturalHeight || img.height || 400;
-
-                        const thumbWidth = 480;
+                        // 1. Compressed thumbnail for Firestore storage
+                        const thumbWidth = 520;
                         const thumbScale = Math.min(1, thumbWidth / img.width);
                         const thumbCanvas = document.createElement('canvas');
                         thumbCanvas.width = Math.round(img.width * thumbScale);
                         thumbCanvas.height = Math.round(img.height * thumbScale);
                         thumbCanvas.getContext('2d').drawImage(img, 0, 0, thumbCanvas.width, thumbCanvas.height);
-                        const compressedDataUrl = thumbCanvas.toDataURL('image/jpeg', 0.72);
+                        const compressedDataUrl = thumbCanvas.toDataURL('image/jpeg', 0.75);
                         state.pendingIdPhotoDataUrl = compressedDataUrl;
 
-                        const ocrWidth = 1024;
-                        const ocrScale = Math.min(1, ocrWidth / img.width);
+                        // 2. High-resolution contrast-enhanced grayscale image for OCR
+                        // Works regardless of image orientation or whether the ID card is only part of the frame!
+                        const maxDim = 1500;
+                        const ocrScale = Math.min(1.5, maxDim / Math.max(img.width, img.height));
                         const ocrCanvas = document.createElement('canvas');
                         ocrCanvas.width = Math.round(img.width * ocrScale);
                         ocrCanvas.height = Math.round(img.height * ocrScale);
-                        ocrCanvas.getContext('2d').drawImage(img, 0, 0, ocrCanvas.width, ocrCanvas.height);
-                        const ocrDataUrl = ocrCanvas.toDataURL('image/jpeg', 0.85);
-                        state.pendingIdPhotoOcrBase64 = ocrDataUrl.split(',')[1] || '';
+                        const ctx = ocrCanvas.getContext('2d');
+                        ctx.filter = 'grayscale(100%) contrast(145%) brightness(105%)';
+                        ctx.drawImage(img, 0, 0, ocrCanvas.width, ocrCanvas.height);
+                        state.pendingIdOcrImageUrl = ocrCanvas.toDataURL('image/png');
 
                         document.getElementById('id-upload-preview').src = compressedDataUrl;
                         document.getElementById('id-upload-placeholder').classList.add('hidden');
@@ -2383,50 +2378,81 @@
         }
 
         /**
-         * Uses official Firebase AI SDK (firebase/ai) bound to the authenticated Firebase project
-         * to inspect the uploaded photo and verify it is a real ID card (not a selfie/portrait).
+         * Local Browser OCR (Tesseract.js Arabic + English) ID Card Verification:
+         * - Completely independent of image aspect ratio or framing (works even if the ID card is a small part of a wide/tall photo).
+         * - Requires ZERO external API keys or servers.
+         * - Scans extracted text for Egyptian National ID markers (Arabic keywords, governorates, or 8+ consecutive digits)
+         *   and rejects selfies/portraits/random photos that contain no ID card text.
          */
-        async function verifyIdCardOnlyWithGemini(base64Image) {
-            const aiInstance = firebaseAI || getAI(firebaseApp, { backend: new GoogleAIBackend() });
+        async function verifyIdCardLocallyWithOCR(ocrImageUrl, onProgress) {
+            if (!window.Tesseract) {
+                throw new Error('مكتبة التعرف الضوئي غير محملة، تأكد من الاتصال بالإنترنت');
+            }
 
-            const prompt = `أنت نظام تحقق صارم من الهوية لتطبيق مصري لمشاركة الركوب (توصيلة).
-قم بفحص الصورة المرفقة بدقة للتأكد من نوعها:
-1. هل الصورة هي بطاقة هوية رسمية حقيقية وواضحة (مثل بطاقة الرقم القومي المصرية أو جواز سفر أو رخصة قيادة)؟
-   - إذا كانت صورة بطاقة هوية رسمية حقيقية (تحتوي على شعار الدولة أو بيانات رسمية أو صورة شخصية صغيرة داخل بطاقة مستطيلة)، اجعل isIdCard = true.
-   - إذا كانت صورة شخصية فقط (بورتريه/سيلفي لشخص)، أو صورة عادية في مكان عام أو مسبح، أو شاشة سوداء، أو مستند آخر غير الهوية، فاجعل isIdCard = false فوراً.
-2. لا تقم بمطابقة أي اسم؛ فقط تحقق من أن الصورة بطاقة هوية رسمية حقيقية وليست صورة شخص.
-3. اكتب سبباً مختصراً وواضحاً باللغة العربية في حقل reason.`;
-
-            const idVerifySchema = Schema.object({
-                properties: {
-                    isIdCard: Schema.boolean(),
-                    reason: Schema.string()
-                },
-                required: ["isIdCard", "reason"]
-            });
-
-            const model = getGenerativeModel(aiInstance, {
-                model: "gemini-2.5-flash",
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: idVerifySchema
-                }
-            });
-
-            const result = await model.generateContent([
-                prompt,
-                {
-                    inlineData: {
-                        data: base64Image,
-                        mimeType: "image/jpeg"
+            const result = await window.Tesseract.recognize(ocrImageUrl, 'ara+eng', {
+                logger: (m) => {
+                    if (m.status === 'recognizing text' && typeof onProgress === 'function') {
+                        const pct = Math.round((m.progress || 0) * 100);
+                        onProgress(pct);
                     }
                 }
-            ]);
+            });
 
-            const responseText = result?.response?.text();
-            if (!responseText) throw new Error('استجابة فارغة من خادم التحقق');
+            const rawText = result?.data?.text || '';
+            // Normalize Arabic characters and convert Eastern Arabic numerals (٠-٩) to Western digits (0-9)
+            const normalized = normalizePhoneDigits(rawText)
+                .replace(/[أإآ]/g, 'ا')
+                .replace(/ة/g, 'ه')
+                .replace(/ى/g, 'ي')
+                .replace(/\s+/g, ' ')
+                .trim();
 
-            return JSON.parse(responseText);
+            // Egyptian National ID / Official ID Arabic keywords
+            const idKeywords = [
+                'جمهوريه', 'مصر', 'العربيه', 'بطاقه', 'تحقيق', 'الشخصيه',
+                'الرقم', 'القومي', 'ذكر', 'انثي', 'مسلم', 'مسيحي',
+                'اعزب', 'متزوج', 'متزوجه', 'القاهره', 'الجيزه', 'الاسكندريه',
+                'الدقهليه', 'الشرقيه', 'المنوفيه', 'القليوبيه', 'البحيره', 'الغربيه',
+                'اسيوط', 'سوهاج', 'قنا', 'اسوان', 'الاقصر', 'المنيا', 'بني سويف',
+                'الفيوم', 'السويس', 'الاسماعيليه', 'بورسعيد', 'دمياط', 'كفر الشيخ',
+                'مطروح', 'سيناء', 'البحر الاحمر', 'الوادي الجديد', 'مركز', 'قسم',
+                'ساريه', 'تاريخ', 'اصدار', 'رخصه', 'قياده', 'جواز', 'سفر'
+            ];
+
+            let matchedKeywords = 0;
+            for (const kw of idKeywords) {
+                if (normalized.includes(kw)) {
+                    matchedKeywords++;
+                }
+            }
+
+            // Check for long digit sequences (e.g., 14-digit National ID or partial 7+ digits)
+            const digitsOnly = normalized.replace(/[^\d]/g, '');
+            const hasLongNumber = /\d{7,}/.test(digitsOnly) || /(\d\s*){8,}/.test(normalized);
+
+            // Check for factory serial code at bottom-left of Egyptian ID (e.g. JM2015559 -> 2 letters + 6-7 digits)
+            const hasSerialCode = /[A-Za-z]{1,3}\d{5,8}/.test(normalized.replace(/\s+/g, ''));
+
+            // Extract meaningful Arabic words (3+ letters)
+            const arabicWords = normalized.match(/[\u0621-\u064A]{3,}/g) || [];
+
+            const isValidId =
+                matchedKeywords >= 1 ||
+                hasLongNumber ||
+                hasSerialCode ||
+                (arabicWords.length >= 4 && digitsOnly.length >= 4);
+
+            if (!isValidId) {
+                return {
+                    isIdCard: false,
+                    reason: 'لم يتم العثور على بيانات أو أرقام بطاقة شخصية واضحة في الصورة (قد تكون صورة شخصية أو غير مقروءة).'
+                };
+            }
+
+            return {
+                isIdCard: true,
+                reason: 'تم قراءة بيانات البطاقة الشخصية بنجاح'
+            };
         }
 
         async function handleAuthFormSubmit(e) {
@@ -2449,7 +2475,7 @@
                     showToast('من فضلك اكتب اسمك بالكامل', 'error');
                     return;
                 }
-                if (!state.pendingIdPhotoDataUrl || !state.pendingIdPhotoOcrBase64) {
+                if (!state.pendingIdPhotoDataUrl || !state.pendingIdOcrImageUrl) {
                     showToast('صورة البطاقة الشخصية مطلوبة لتوثيق الحساب', 'error');
                     return;
                 }
@@ -2461,26 +2487,28 @@
                     return;
                 }
 
-                // Strictly verify that the uploaded image is an ID card via Firebase AI (Gemini Vision)
+                // Verify ID card via local browser OCR (works regardless of image dimensions or distance)
                 const submitBtn = document.getElementById('auth-submit-btn');
                 state.isVerifyingId = true;
                 submitBtn.disabled = true;
-                submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>جاري فحص صورة البطاقة بالذكاء الاصطناعي...</span>`;
-                showIdVerifyStatus('loading', 'جاري فحص صورة البطاقة للتأكد من صحتها...');
+                submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>جاري قراءة بيانات البطاقة...</span>`;
+                showIdVerifyStatus('loading', 'جاري فحص وقراءة بيانات البطاقة الشخصية...');
 
                 try {
-                    const verification = await verifyIdCardOnlyWithGemini(state.pendingIdPhotoOcrBase64);
+                    const verification = await verifyIdCardLocallyWithOCR(state.pendingIdOcrImageUrl, (pct) => {
+                        showIdVerifyStatus('loading', `جاري فحص وقراءة بيانات البطاقة... (${pct}%)`);
+                    });
 
                     if (!verification.isIdCard) {
-                        showIdVerifyStatus('error', `الصورة المرفقة ليست بطاقة شخصية. ${escapeHtml(verification.reason || 'يرجى رفع صورة واضحة للبطاقة الشخصية.')}`);
-                        showToast('تم رفض الصورة: ليست بطاقة شخصية', 'error');
+                        showIdVerifyStatus('error', `${escapeHtml(verification.reason)} يرجى تصوير البطاقة بإضاءة أوضح.`);
+                        showToast('الصورة المرفقة ليست بطاقة شخصية واضحة', 'error');
                         return;
                     }
 
-                    showIdVerifyStatus('success', 'تم التأكد من أن الصورة بطاقة هوية صالحة بنجاح');
+                    showIdVerifyStatus('success', 'تم التحقق من بيانات البطاقة الشخصية بنجاح');
                 } catch (err) {
-                    console.error('ID Verification Error:', err);
-                    showIdVerifyStatus('error', `تعذر التحقق من صورة البطاقة حالياً (${escapeHtml(err.message)}). تأكد من الاتصال بالإنترنت وحاول مرة أخرى.`);
+                    console.error('OCR ID Verification Error:', err);
+                    showIdVerifyStatus('error', `تعذر فحص البطاقة (${escapeHtml(err.message)}). تأكد من الاتصال بالإنترنت وحاول مرة أخرى.`);
                     showToast('فشل التحقق من البطاقة، لم يتم إنشاء الحساب', 'error');
                     return;
                 } finally {
@@ -2522,9 +2550,7 @@
 
             state.currentUser = authenticatedUser;
             state.pendingIdPhotoDataUrl = '';
-            state.pendingIdPhotoOcrBase64 = '';
-            state.pendingIdWidth = 0;
-            state.pendingIdHeight = 0;
+            state.pendingIdOcrImageUrl = '';
             hideIdVerifyStatus();
 
             if (firebaseAuthUser) {
