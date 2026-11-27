@@ -1,3 +1,2402 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>توصيلة — مشاركة المشاوير اليومية</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Arabic Font: Cairo -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Leaflet Maps CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+            overflow-x: hidden;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+
+        /* Leaflet Z-Index Fix inside modals */
+        .leaflet-container {
+            font-family: 'Cairo', sans-serif !important;
+            z-index: 10;
+        }
+
+        /* Custom Map Pin Styles */
+        .custom-pin {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9999px;
+            color: white;
+            font-weight: 800;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+            border: 2.5px solid #ffffff;
+        }
+
+        .dir-ltr {
+            direction: ltr;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+
+    <!-- ==================== HEADER ==================== -->
+    <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-sm">
+        <div class="max-w-5xl mx-auto px-3 sm:px-5 py-2.5 flex flex-wrap items-center justify-between gap-2.5">
+            <!-- Brand Logo -->
+            <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white flex items-center justify-center shadow-md shadow-emerald-200 text-lg">
+                    <i class="fa-solid fa-car-side"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg sm:text-xl font-black text-slate-900 leading-none">توصيلة</h1>
+                    <div class="flex items-center gap-1.5 mt-0.5">
+                        <p class="text-[11px] font-bold text-slate-500">مشاركة المشاوير اليومية بذكاء</p>
+                        <span id="cloud-status-badge" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200">
+                            <i class="fa-solid fa-spinner fa-spin"></i> جاري الاتصال...
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mode Switcher & User Controls -->
+            <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                <div class="grid grid-cols-2 bg-slate-100 p-1 rounded-2xl border border-slate-200/70 flex-1 sm:flex-none">
+                    <button id="btn-mode-passenger" onclick="switchMode('passenger')"
+                        class="py-2 px-3 rounded-xl text-xs sm:text-sm font-extrabold transition flex items-center justify-center gap-1.5 bg-white text-emerald-700 shadow-sm">
+                        <i class="fa-solid fa-user"></i>
+                        <span>وضع الراكب</span>
+                    </button>
+                    <button id="btn-mode-driver" onclick="switchMode('driver')"
+                        class="py-2 px-3 rounded-xl text-xs sm:text-sm font-extrabold transition flex items-center justify-center gap-1.5 text-slate-600 hover:text-slate-900">
+                        <i class="fa-solid fa-car"></i>
+                        <span>وضع السائق</span>
+                    </button>
+                </div>
+
+                <!-- User Account / Profile Button -->
+                <button id="header-user-btn" onclick="handleHeaderUserClick()"
+                    class="shrink-0 px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-extrabold transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-user-plus"></i>
+                    <span class="hidden sm:inline">دخول / حساب جديد</span>
+                </button>
+
+                <!-- Admin Users Database Button -->
+                <button onclick="openUsersDatabaseModal()" title="قاعدة بيانات المستخدمين والبطاقات"
+                    class="shrink-0 px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-extrabold transition flex items-center gap-1.5 shadow-sm">
+                    <i class="fa-solid fa-users-viewfinder text-emerald-400"></i>
+                    <span class="hidden md:inline">المستخدمين</span>
+                    <span id="badge-total-users" class="bg-emerald-500 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full">0</span>
+                </button>
+
+                <button onclick="resetDemoDataConfirm()" title="إعادة ضبط البيانات التجريبية"
+                    class="hidden sm:flex items-center justify-center w-9 h-9 text-slate-400 hover:text-emerald-600 rounded-xl hover:bg-slate-100 transition">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ==================== MAIN CONTENT ==================== -->
+    <main class="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-5 py-5 space-y-5">
+
+        <!-- ==================== PASSENGER VIEW ==================== -->
+        <section id="view-passenger" class="space-y-5">
+            <!-- Sub-Navigation Tabs -->
+            <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-sm">
+                <div class="flex items-center gap-1.5 w-full sm:w-auto">
+                    <button id="p-tab-browse" onclick="switchPassengerTab('browse')"
+                        class="flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold bg-emerald-600 text-white shadow-sm transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-route"></i>
+                        <span>الرحلات المتاحة</span>
+                    </button>
+                    <button id="p-tab-bookings" onclick="switchPassengerTab('bookings')"
+                        class="flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold bg-slate-100 text-slate-700 hover:bg-slate-200 transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-ticket"></i>
+                        <span>حجوزاتي</span>
+                        <span id="badge-my-bookings" class="bg-emerald-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">0</span>
+                    </button>
+                </div>
+
+                <!-- Direction Filter -->
+                <div id="passenger-direction-filters" class="flex items-center gap-1.5 w-full sm:w-auto justify-end">
+                    <button onclick="setDirectionFilter('all')" id="filter-dir-all"
+                        class="flex-1 sm:flex-none px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-900 text-white transition">الكل</button>
+                    <button onclick="setDirectionFilter('go')" id="filter-dir-go"
+                        class="flex-1 sm:flex-none px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">
+                        <i class="fa-solid fa-sun text-amber-500 ml-1"></i>ذهاب
+                    </button>
+                    <button onclick="setDirectionFilter('return')" id="filter-dir-return"
+                        class="flex-1 sm:flex-none px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">
+                        <i class="fa-solid fa-moon text-indigo-500 ml-1"></i>عودة
+                    </button>
+                </div>
+            </div>
+
+            <!-- Browse Trips List -->
+            <div id="passenger-browse-panel" class="space-y-4">
+                <!-- Smart Pricing Banner -->
+                <div class="bg-gradient-to-l from-emerald-600 to-teal-700 text-white rounded-3xl p-4 sm:p-5 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div class="space-y-1">
+                        <div class="inline-flex items-center gap-1.5 bg-white/20 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold">
+                            <i class="fa-solid fa-sparkles"></i> نظام التسعير الذكي العادل
+                        </div>
+                        <h2 class="text-base sm:text-lg font-black">وفر أكتر كل ما تشارك المشوار وتنزل أقرب!</h2>
+                        <p class="text-xs text-emerald-50 font-semibold leading-relaxed">
+                            ادفع حسب مسافتك على الخط (من 70% لـ 100%) + خصم مشاركة تلقائي: راكب واحد 100%، راكبين 80%، 3 ركاب 50%.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Trips Grid -->
+                <div id="passenger-trips-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+            </div>
+
+            <!-- My Bookings List -->
+            <div id="passenger-bookings-panel" class="hidden space-y-4">
+                <div id="my-bookings-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+            </div>
+        </section>
+
+        <!-- ==================== DRIVER VIEW ==================== -->
+        <section id="view-driver" class="hidden space-y-5">
+            <!-- Driver Sub-Navigation -->
+            <div class="flex items-center gap-2 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-sm">
+                <button id="d-tab-create" onclick="switchDriverTab('create')"
+                    class="flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold bg-emerald-600 text-white shadow-sm transition flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-plus-circle"></i>
+                    <span id="d-tab-create-label">إضافة رحلة جديدة</span>
+                </button>
+                <button id="d-tab-my-trips" onclick="switchDriverTab('my-trips')"
+                    class="flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold bg-slate-100 text-slate-700 hover:bg-slate-200 transition flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-list-check"></i>
+                    <span>رحلاتي والركاب</span>
+                    <span id="badge-driver-trips" class="bg-slate-800 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">0</span>
+                </button>
+            </div>
+
+            <!-- Create / Edit Trip Form -->
+            <div id="driver-create-panel" class="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-5">
+                <div class="flex items-center justify-between flex-wrap gap-2 border-b border-slate-100 pb-3">
+                    <div>
+                        <h2 id="driver-form-title" class="text-lg font-black text-slate-900">نشر خط سير يومي جديد</h2>
+                        <p class="text-xs font-semibold text-slate-500">حدد نقطة البداية والنهاية ومواعيدك وتفاصيل عربيتك</p>
+                    </div>
+                    <button type="button" id="btn-cancel-edit" onclick="cancelEditTrip()"
+                        class="hidden px-3 py-1.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-extrabold hover:bg-rose-100 transition">
+                        <i class="fa-solid fa-xmark ml-1"></i> إلغاء التعديل
+                    </button>
+                </div>
+
+                <form id="driver-trip-form" onsubmit="handleDriverTripSubmit(event)" class="space-y-5">
+                    <!-- Direction & Basic Info -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">نوع الرحلة</label>
+                            <div class="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-xl">
+                                <button type="button" id="d-dir-go" onclick="setDriverDirection('go')"
+                                    class="py-2 rounded-lg text-xs font-extrabold bg-white text-emerald-700 shadow-sm transition">
+                                    <i class="fa-solid fa-sun text-amber-500 ml-1"></i>ذهاب
+                                </button>
+                                <button type="button" id="d-dir-return" onclick="setDriverDirection('return')"
+                                    class="py-2 rounded-lg text-xs font-extrabold text-slate-600 transition">
+                                    <i class="fa-solid fa-moon text-indigo-500 ml-1"></i>عودة
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">اسم الكابتن</label>
+                            <input type="text" id="d-driver-name" required value="كابتن أحمد محمود"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:border-emerald-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">ميعاد التحرك</label>
+                            <input type="time" id="d-time" required value="08:00"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:border-emerald-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">السعر الأساسي للمشوار (ج.م)</label>
+                            <input type="number" id="d-price" required min="10" max="1000" value="100"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:border-emerald-500">
+                        </div>
+                    </div>
+
+                    <!-- Car Specs & Seats -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 bg-slate-50 p-3.5 rounded-2xl border border-slate-200/70">
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">عدد الكراسي المتاحة</label>
+                            <select id="d-seats" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold focus:outline-none focus:border-emerald-500">
+                                <option value="1">1 كرسي</option>
+                                <option value="2">2 كرسي</option>
+                                <option value="3" selected>3 كراسي (الموصى به)</option>
+                                <option value="4">4 كراسي</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">موديل العربية</label>
+                            <input type="text" id="d-car-model" required placeholder="مثال: هيونداي إلنترا" value="هيونداي إلنترا CN7"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold focus:outline-none focus:border-emerald-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">سنة التصنيع</label>
+                            <input type="number" id="d-car-year" required min="1995" max="2027" value="2023"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold focus:outline-none focus:border-emerald-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-700 mb-1.5">حالة التكييف</label>
+                            <div class="grid grid-cols-2 gap-1.5 bg-white p-1 rounded-xl border border-slate-200">
+                                <button type="button" id="d-ac-yes" onclick="setDriverAC(true)"
+                                    class="py-2 rounded-lg text-xs font-extrabold bg-sky-600 text-white shadow-sm transition">
+                                    <i class="fa-solid fa-snowflake ml-1"></i>متاح
+                                </button>
+                                <button type="button" id="d-ac-no" onclick="setDriverAC(false)"
+                                    class="py-2 rounded-lg text-xs font-extrabold text-slate-500 transition">
+                                    غير متاح
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Interactive Map Route Selector -->
+                    <div class="space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <label class="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+                                <i class="fa-solid fa-map-location-dot text-emerald-600"></i>
+                                حدد مسار الرحلة على الخريطة (البداية والنهاية)
+                            </label>
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <button type="button" id="btn-pick-start" onclick="setMapPickMode('start')"
+                                    class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-emerald-600 text-white shadow-sm transition">
+                                    <i class="fa-solid fa-play ml-1"></i>تحديد البداية
+                                </button>
+                                <button type="button" id="btn-pick-end" onclick="setMapPickMode('end')"
+                                    class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-100 text-slate-700 hover:bg-slate-200 transition">
+                                    <i class="fa-solid fa-flag-checkered ml-1"></i>تحديد النهاية
+                                </button>
+                                <button type="button" onclick="useCurrentGpsForStart()"
+                                    class="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100 transition">
+                                    <i class="fa-solid fa-crosshairs ml-1"></i>موقعي (GPS)
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Quick Presets & Text Labels -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="space-y-1.5">
+                                <input type="text" id="d-start-name" required placeholder="اسم نقطة البداية (مثال: الشيخ زايد)"
+                                    class="w-full px-3.5 py-2 rounded-xl border border-emerald-200 bg-emerald-50/40 text-xs font-bold focus:outline-none focus:border-emerald-500">
+                                <div class="flex flex-wrap gap-1" id="quick-start-presets"></div>
+                            </div>
+                            <div class="space-y-1.5">
+                                <input type="text" id="d-end-name" required placeholder="اسم نقطة النهاية (مثال: التجمع الخامس)"
+                                    class="w-full px-3.5 py-2 rounded-xl border border-rose-200 bg-rose-50/40 text-xs font-bold focus:outline-none focus:border-rose-500">
+                                <div class="flex flex-wrap gap-1" id="quick-end-presets"></div>
+                            </div>
+                        </div>
+
+                        <!-- Driver Map Container -->
+                        <div class="relative rounded-2xl overflow-hidden border border-slate-200 shadow-inner">
+                            <div id="driver-map" class="w-full h-64 sm:h-72 bg-slate-100"></div>
+                            <div id="driver-route-info"
+                                class="absolute bottom-3 right-3 z-[20] bg-white/95 backdrop-blur px-3 py-1.5 rounded-xl shadow-md border border-slate-200 text-xs font-extrabold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-route text-emerald-600"></i>
+                                <span>اختر البداية والنهاية لرسم أسهل مسار</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" id="driver-submit-btn"
+                        class="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-lg shadow-emerald-200 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span>نشر الرحلة الآن</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Driver Trips Management Panel -->
+            <div id="driver-trips-panel" class="hidden space-y-4">
+                <div id="driver-trips-list" class="space-y-4"></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ==================== BOOKING MODAL (PASSENGER) ==================== -->
+    <div id="booking-modal" class="fixed inset-0 z-50 hidden bg-slate-900/65 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl border border-slate-200 overflow-hidden my-auto max-h-[94vh] flex flex-col">
+            <!-- Header -->
+            <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 shrink-0">
+                <div>
+                    <h3 id="bm-title" class="text-base font-black text-slate-900">حجز كرسي في الرحلة</h3>
+                    <p id="bm-subtitle" class="text-xs font-bold text-slate-500 mt-0.5"></p>
+                </div>
+                <button onclick="closeBookingModal()" class="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Scrollable Content -->
+            <div class="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
+                <!-- Car & Driver Quick Strip -->
+                <div id="bm-car-strip" class="flex flex-wrap items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-2xl px-3.5 py-2.5 text-xs font-bold text-slate-700"></div>
+
+                <!-- Step 1: Pick Dropoff on Map -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between flex-wrap gap-1">
+                        <label class="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+                            <span class="w-5 h-5 rounded-full bg-emerald-600 text-white text-[11px] flex items-center justify-center">1</span>
+                            اضغط على خط السير لتحديد نقطة النزول:
+                        </label>
+                        <span id="dropoff-ratio-badge" class="text-[11px] font-black bg-orange-100 text-orange-800 px-2.5 py-0.5 rounded-full">نهاية الخط (100%)</span>
+                    </div>
+
+                    <div id="booking-map" class="w-full h-52 sm:h-56 rounded-2xl border border-slate-200 overflow-hidden"></div>
+
+                    <p id="selected-dropoff-text" class="text-xs font-bold text-slate-600 bg-orange-50/70 border border-orange-200/70 rounded-xl px-3 py-2">
+                        <i class="fa-solid fa-location-pin text-orange-500 ml-1"></i> نقطة النزول: نهاية المسار (اضغط على الخط للتغيير)
+                    </p>
+
+                    <!-- Interactive Distance Discount Guide -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-black text-slate-700 flex items-center gap-1.5">
+                                <i class="fa-solid fa-ruler-horizontal text-emerald-600"></i>
+                                دليل خصم المسافة (حسب نقطة نزولك على الخط):
+                            </span>
+                        </div>
+                        <div id="distance-tiers-guide" class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-center"></div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Seat Count Selector with Sharing Discounts -->
+                <div class="space-y-2">
+                    <label class="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+                        <span class="w-5 h-5 rounded-full bg-emerald-600 text-white text-[11px] flex items-center justify-center">2</span>
+                        اختر عدد الكراسي (مع خصم المشاركة التلقائي):
+                    </label>
+                    <div id="seat-count-selector" class="grid grid-cols-3 gap-2"></div>
+                    <p class="text-[11px] font-semibold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                        <i class="fa-solid fa-circle-info text-emerald-600 ml-1"></i>
+                        خصم المشاركة يُحسب على إجمالي الركاب في العربية: <strong>راكب واحد (100%)</strong> • <strong>راكبين (خصم 20%)</strong> • <strong>3 ركاب فأكثر (خصم 50%)</strong>.
+                    </p>
+                </div>
+
+                <!-- Live Smart Price Breakdown Box -->
+                <div id="booking-price-box" class="bg-emerald-50/80 border-2 border-emerald-200 rounded-2xl p-3.5 space-y-2"></div>
+
+                <!-- Step 3: Passenger Form -->
+                <form id="booking-form" onsubmit="handleBookingSubmit(event)" class="space-y-3 pt-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-700 mb-1">اسم الراكب</label>
+                            <input type="text" id="p-name" required placeholder="الاسم بالكامل"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:border-emerald-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-extrabold text-slate-700 mb-1">رقم الموبايل</label>
+                            <input type="tel" id="p-phone" required placeholder="01xxxxxxxxx"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:border-emerald-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-extrabold text-slate-700 mb-1">مكان الركوب (فين هيقابلك الكابتن؟)</label>
+                        <input type="text" id="p-pickup" required placeholder="مثال: أمام هايبر وان — بوابة 2"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:border-emerald-500">
+                    </div>
+
+                    <button type="submit"
+                        class="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-lg shadow-emerald-200 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-check-double"></i>
+                        <span>تأكيد حجز الكراسي</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== DRIVER DROPOFFS MAP MODAL ==================== -->
+    <div id="driver-dropoffs-modal" class="fixed inset-0 z-50 hidden bg-slate-900/65 backdrop-blur-sm flex items-center justify-center p-3">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div>
+                    <h3 id="ddm-title" class="text-base font-black text-slate-900">خريطة نقاط نزول الركاب</h3>
+                    <p id="ddm-subtitle" class="text-xs font-semibold text-slate-500">اضغط على أي دبوس برتقالي لمعرفة تفاصيل الراكب والمبلغ</p>
+                </div>
+                <button onclick="closeDriverDropoffsModal()" class="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-4 space-y-3 overflow-y-auto">
+                <div id="driver-dropoffs-map" class="w-full h-72 sm:h-80 rounded-2xl border border-slate-200 overflow-hidden"></div>
+                <div id="ddm-passengers-legend" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== CONFIRMATION MODAL ==================== -->
+    <div id="confirm-modal" class="fixed inset-0 z-[60] hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-5 space-y-4 border border-slate-200 text-center">
+            <div class="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 mx-auto flex items-center justify-center text-xl">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div class="space-y-1">
+                <h3 id="confirm-title" class="text-base font-black text-slate-900">تأكيد الإجراء</h3>
+                <p id="confirm-message" class="text-xs font-semibold text-slate-500 leading-relaxed"></p>
+            </div>
+            <div class="grid grid-cols-2 gap-2.5 pt-1">
+                <button onclick="closeConfirmModal()" class="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs transition">تراجع</button>
+                <button id="confirm-ok-btn" class="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs transition">تأكيد</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== AUTH MODAL (REGISTER / LOGIN + ID) ==================== -->
+    <div id="auth-modal" class="fixed inset-0 z-[55] hidden bg-slate-900/65 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md border border-slate-200 overflow-hidden my-auto">
+            <!-- Modal Header -->
+            <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center">
+                        <i class="fa-solid fa-shield-halved"></i>
+                    </div>
+                    <div>
+                        <h3 id="auth-modal-title" class="text-base font-black text-slate-900">إنشاء حساب جديد</h3>
+                        <p id="auth-modal-subtitle" class="text-[11px] font-semibold text-slate-500">توثيق الهوية ورقم الموبايل المصري لضمان أمان الرحلات</p>
+                    </div>
+                </div>
+                <button onclick="closeAuthModal()" class="w-8 h-8 rounded-full bg-slate-200/70 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Registration / Login Form -->
+            <div id="auth-step-form" class="p-5 space-y-4">
+                <!-- Tabs: Register vs Login -->
+                <div class="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-2xl">
+                    <button type="button" id="auth-tab-register" onclick="switchAuthTab('register')"
+                        class="py-2 rounded-xl text-xs font-extrabold bg-white text-emerald-700 shadow-sm transition">
+                        حساب جديد
+                    </button>
+                    <button type="button" id="auth-tab-login" onclick="switchAuthTab('login')"
+                        class="py-2 rounded-xl text-xs font-extrabold text-slate-600 hover:text-slate-900 transition">
+                        تسجيل الدخول
+                    </button>
+                </div>
+
+                <form id="auth-form" onsubmit="handleAuthFormSubmit(event)" class="space-y-3.5">
+                    <!-- Role Selector (Register only) -->
+                    <div id="auth-field-role">
+                        <label class="block text-xs font-bold text-slate-700 mb-1.5">نوع الحساب</label>
+                        <div class="grid grid-cols-3 gap-1.5 bg-slate-100 p-1 rounded-xl">
+                            <button type="button" id="role-btn-passenger" onclick="setAuthRole('passenger')"
+                                class="py-2 rounded-lg text-xs font-extrabold bg-white text-emerald-700 shadow-sm transition">
+                                <i class="fa-solid fa-user ml-1"></i>راكب
+                            </button>
+                            <button type="button" id="role-btn-driver" onclick="setAuthRole('driver')"
+                                class="py-2 rounded-lg text-xs font-extrabold text-slate-600 hover:text-slate-900 transition">
+                                <i class="fa-solid fa-car ml-1"></i>سائق
+                            </button>
+                            <button type="button" id="role-btn-both" onclick="setAuthRole('both')"
+                                class="py-2 rounded-lg text-xs font-extrabold text-slate-600 hover:text-slate-900 transition">
+                                <i class="fa-solid fa-arrows-left-right ml-1"></i>كلاهما
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Full Name (Register only) -->
+                    <div id="auth-field-name">
+                        <label class="block text-xs font-bold text-slate-700 mb-1">الاسم بالكامل</label>
+                        <input type="text" id="auth-name"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                            placeholder="مثال: محمد أحمد علي">
+                    </div>
+
+                    <!-- Phone Number -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">رقم الموبايل المصري</label>
+                        <div class="relative">
+                            <input type="tel" id="auth-phone" required maxlength="11" inputmode="numeric"
+                                class="w-full pl-14 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 text-right"
+                                placeholder="010 / 011 / 012 / 015">
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-extrabold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">+20</span>
+                        </div>
+                        <p class="text-[10px] font-semibold text-slate-400 mt-1">يجب أن يتكون من 11 رقماً ويبدأ بـ 010 أو 011 أو 012 أو 015</p>
+                    </div>
+
+                    <!-- National ID Photo Upload (Register only) -->
+                    <div id="auth-field-id">
+                        <label class="block text-xs font-bold text-slate-700 mb-1.5">صورة البطاقة الشخصية (الوجه الأمامي)</label>
+                        <label id="id-upload-box" for="auth-id-input"
+                            class="block border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-slate-50 hover:bg-emerald-50/40 rounded-2xl p-4 text-center cursor-pointer transition">
+                            <div id="id-upload-placeholder" class="space-y-1.5">
+                                <div class="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center text-lg">
+                                    <i class="fa-solid fa-id-card"></i>
+                                </div>
+                                <p class="text-xs font-extrabold text-slate-700">اضغط لرفع صورة البطاقة من المعرض أو التصوير بالكاميرا</p>
+                                <p class="text-[10px] font-semibold text-slate-400">يرجى إرفاق صورة واضحة للبطاقة الشخصية</p>
+                            </div>
+                            <div id="id-upload-preview-wrap" class="hidden space-y-2">
+                                <img id="id-upload-preview" src="" alt="صورة البطاقة" class="w-full h-36 object-cover rounded-xl border border-slate-200 shadow-sm">
+                                <span class="inline-flex items-center gap-1 text-[11px] font-extrabold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                                    <i class="fa-solid fa-check-circle"></i> تم إرفاق صورة البطاقة (اضغط للتغيير)
+                                </span>
+                            </div>
+                        </label>
+                        <input type="file" id="auth-id-input" accept="image/*" class="hidden" onchange="handleIdPhotoUpload(event)">
+                        <!-- Smart ID Verification Status Box -->
+                        <div id="id-verify-status" class="hidden mt-2 rounded-xl px-3 py-2 text-xs font-bold border"></div>
+                    </div>
+
+                    <button type="submit" id="auth-submit-btn"
+                        class="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-md shadow-emerald-200 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-user-check"></i>
+                        <span>إنشاء الحساب وتوثيق الهوية</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== USER PROFILE MODAL ==================== -->
+    <div id="profile-modal" class="fixed inset-0 z-[55] hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm border border-slate-200 overflow-hidden">
+            <div class="p-5 bg-gradient-to-br from-emerald-600 to-teal-700 text-white flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-xl font-black" id="profile-avatar-letter">
+                        م
+                    </div>
+                    <div>
+                        <h3 id="profile-name" class="text-base font-black leading-tight">اسم المستخدم</h3>
+                        <p id="profile-phone" class="text-xs text-emerald-100 font-bold mt-0.5"></p>
+                    </div>
+                </div>
+                <button onclick="closeProfileModal()" class="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div class="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-2xl px-3.5 py-2.5 text-xs">
+                    <span class="font-extrabold text-emerald-800 flex items-center gap-1.5">
+                        <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                        حالة التوثيق
+                    </span>
+                    <span class="bg-emerald-600 text-white font-extrabold px-2.5 py-0.5 rounded-full text-[11px]">موثّق بالبطاقة الشخصية</span>
+                </div>
+
+                <div class="space-y-1.5">
+                    <p class="text-xs font-extrabold text-slate-700">صورة البطاقة الشخصية المسجلة</p>
+                    <img id="profile-id-image" src="" alt="صورة البطاقة" class="w-full h-40 object-cover rounded-2xl border border-slate-200 bg-slate-50">
+                </div>
+
+                <button onclick="logoutUser()"
+                    class="w-full py-2.5 rounded-2xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-extrabold text-xs transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    تسجيل الخروج
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== ADMIN USERS DATABASE MODAL ==================== -->
+    <div id="users-db-modal" class="fixed inset-0 z-[58] hidden bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col">
+            <!-- Header -->
+            <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white shrink-0">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center font-black">
+                        <i class="fa-solid fa-database"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-black">قاعدة بيانات المستخدمين المسجلين</h3>
+                        <p class="text-[11px] text-slate-300 font-semibold">سجل كامل بالأسماء وأرقام الهواتف وصور البطاقات الشخصية</p>
+                    </div>
+                </div>
+                <button onclick="closeUsersDatabaseModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Admin PIN Lock Screen -->
+            <div id="users-db-lock-screen" class="p-6 sm:p-8 text-center max-w-sm mx-auto space-y-4">
+                <div class="w-14 h-14 rounded-2xl bg-slate-100 text-slate-800 mx-auto flex items-center justify-center text-2xl border border-slate-200">
+                    <i class="fa-solid fa-lock"></i>
+                </div>
+                <div class="space-y-1">
+                    <h4 class="text-base font-black text-slate-900">منطقة الإدارة المحمية</h4>
+                    <p class="text-xs font-semibold text-slate-500">أدخل رمز مرور الإدارة لعرض بيانات وصور بطاقات المستخدمين</p>
+                </div>
+                <form onsubmit="unlockUsersDatabase(event)" class="space-y-3">
+                    <input type="password" id="admin-pin-input" inputmode="numeric" maxlength="8" required placeholder="أدخل رمز مرور الإدارة"
+                        class="w-full px-4 py-3 rounded-2xl border border-slate-300 text-center text-base font-black tracking-widest focus:outline-none focus:border-emerald-500">
+                    <button type="submit"
+                        class="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition">
+                        فتح قاعدة البيانات
+                    </button>
+                </form>
+            </div>
+
+            <!-- Unlocked Users List Content -->
+            <div id="users-db-content" class="hidden p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
+                <!-- Stats & Filters -->
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-magnifying-glass absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="users-db-search" oninput="renderUsersDatabaseList()" placeholder="ابحث بالاسم أو رقم الموبايل..."
+                            class="w-full pr-9 pl-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold focus:outline-none focus:border-emerald-500">
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" onclick="setUsersRoleFilter('all')" id="ufilter-all"
+                            class="px-3 py-2 rounded-xl text-xs font-extrabold bg-slate-900 text-white transition">الكل</button>
+                        <button type="button" onclick="setUsersRoleFilter('driver')" id="ufilter-driver"
+                            class="px-3 py-2 rounded-xl text-xs font-extrabold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition">السائقين</button>
+                        <button type="button" onclick="setUsersRoleFilter('passenger')" id="ufilter-passenger"
+                            class="px-3 py-2 rounded-xl text-xs font-extrabold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition">الركاب</button>
+                    </div>
+                </div>
+
+                <!-- Summary Strip -->
+                <div id="users-db-summary" class="grid grid-cols-3 gap-2 text-center"></div>
+
+                <!-- Users Cards Grid -->
+                <div id="users-db-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3.5"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== FULLSCREEN ID PHOTO LIGHTBOX ==================== -->
+    <div id="id-lightbox-modal" class="fixed inset-0 z-[65] hidden bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4" onclick="closeIdLightbox()">
+        <div class="max-w-2xl w-full bg-white rounded-3xl overflow-hidden shadow-2xl border border-slate-700" onclick="event.stopPropagation()">
+            <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
+                <span id="id-lightbox-title" class="text-xs font-black">صورة البطاقة الشخصية</span>
+                <button onclick="closeIdLightbox()" class="w-7 h-7 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-xs">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-3 bg-slate-950 flex items-center justify-center">
+                <img id="id-lightbox-img" src="" alt="البطاقة الشخصية" class="max-h-[75vh] w-auto rounded-xl object-contain">
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TOAST NOTIFICATION ==================== -->
+    <div id="toast-container" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] flex flex-col gap-2 w-[90%] max-w-sm pointer-events-none"></div>
+
+    <!-- ==================== APPLICATION JAVASCRIPT (FIREBASE + STRICT ID OCR + CASCADE DELETE) ==================== -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // ==========================================================
+        // 0. FIREBASE INITIALIZATION & REAL-TIME SYNC SETUP
+        // ==========================================================
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'tawsila-carpool-app';
+
+        const fallbackFirebaseConfig = {
+            apiKey: "AIzaSyApO-7UTu3esaHI-NTqcJIM7XCYAcDMdf4",
+            authDomain: "tawsila-app-53006.firebaseapp.com",
+            projectId: "tawsila-app-53006",
+            storageBucket: "tawsila-app-53006.firebasestorage.app",
+            messagingSenderId: "695803598769",
+            appId: "1:695803598769:web:68b7ded66002dc3edd0f90"
+        };
+
+        const firebaseConfig = typeof __firebase_config !== 'undefined'
+            ? JSON.parse(__firebase_config)
+            : fallbackFirebaseConfig;
+
+        let firebaseApp = null;
+        let db = null;
+        let auth = null;
+        let firebaseAuthUser = null;
+        let isCloudReady = false;
+
+        // ==========================================================
+        // 1. CONSTANTS, PRESETS & GLOBAL STATE
+        // ==========================================================
+        const PRESET_LOCATIONS = [
+            { name: 'الشيخ زايد', coords: [30.0444, 30.9850] },
+            { name: 'التجمع الخامس', coords: [30.0074, 31.4913] },
+            { name: 'المعادي', coords: [29.9602, 31.2569] },
+            { name: 'مدينة نصر', coords: [30.0511, 31.3656] },
+            { name: 'المهندسين', coords: [30.0566, 31.2001] },
+            { name: '6 أكتوبر', coords: [29.9611, 30.9295] },
+            { name: 'القرية الذكية', coords: [30.0715, 31.0169] }
+        ];
+
+        const state = {
+            mode: 'passenger',
+            passengerTab: 'browse',
+            driverTab: 'create',
+            directionFilter: 'all',
+
+            trips: [],
+
+            editingTripId: null,
+            driverDirection: 'go',
+            driverAC: true,
+            mapPickMode: 'start',
+            driverStartCoords: [30.0444, 30.9850],
+            driverEndCoords: [30.0074, 31.4913],
+            driverRouteCoords: [],
+            driverDistanceKm: 52,
+            driverDurationMin: 60,
+
+            selectedTripId: null,
+            selectedSeatsToBook: 1,
+            selectedDropoff: null,
+
+            users: [],
+            currentUser: null,
+            authMode: 'register',
+            authRole: 'passenger',
+            pendingIdPhotoDataUrl: '',
+            pendingIdOcrImageUrl: '',
+            isVerifyingId: false,
+            afterAuthCallback: null,
+
+            isAdminUnlocked: false,
+            usersRoleFilter: 'all'
+        };
+
+        let driverMap = null, driverStartMarker = null, driverEndMarker = null, driverRouteLine = null;
+        let bookingMap = null, bookingRouteLine = null, bookingDropoffMarker = null;
+        let dropoffsMap = null;
+
+        // ==========================================================
+        // 2. FIRESTORE HELPERS, SERIALIZATION & REAL-TIME LISTENERS
+        // ==========================================================
+        function updateCloudBadge(status, detail = '') {
+            const badge = document.getElementById('cloud-status-badge');
+            if (!badge) return;
+            if (status === 'connected') {
+                badge.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200';
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> مزامنة مباشرة`;
+            } else if (status === 'error') {
+                badge.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200';
+                badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${detail || 'تعذر الاتصال'}`;
+            } else {
+                badge.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200';
+                badge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> جاري الاتصال...`;
+            }
+        }
+
+        function tripsCollectionRef() {
+            return collection(db, 'artifacts', appId, 'public', 'data', 'trips');
+        }
+
+        function tripDocRef(tripId) {
+            return doc(db, 'artifacts', appId, 'public', 'data', 'trips', tripId);
+        }
+
+        function usersCollectionRef() {
+            return collection(db, 'artifacts', appId, 'public', 'data', 'users');
+        }
+
+        function userDocRef(userId) {
+            return doc(db, 'artifacts', appId, 'public', 'data', 'users', userId);
+        }
+
+        function sessionDocRef() {
+            return doc(db, 'artifacts', appId, 'users', firebaseAuthUser.uid, 'session', 'current');
+        }
+
+        function metaInitDocRef() {
+            return doc(db, 'artifacts', appId, 'public', 'data', 'meta', 'init');
+        }
+
+        function serializeTripForFirestore(trip) {
+            const { routeCoords, ...rest } = trip;
+            return {
+                ...rest,
+                routeCoordsJson: JSON.stringify(routeCoords || []),
+                createdAt: trip.createdAt || Date.now()
+            };
+        }
+
+        function deserializeTripFromFirestore(data) {
+            let routeCoords = [];
+            try {
+                routeCoords = data.routeCoordsJson ? JSON.parse(data.routeCoordsJson) : [];
+            } catch (e) {
+                routeCoords = [];
+            }
+            return {
+                ...data,
+                routeCoords,
+                bookings: Array.isArray(data.bookings) ? data.bookings : []
+            };
+        }
+
+        function getDefaultTrips() {
+            const now = Date.now();
+            return [
+                {
+                    id: 'trip-1',
+                    direction: 'go',
+                    driverName: 'كابتن أحمد محمود',
+                    time: '08:00',
+                    basePrice: 100,
+                    totalSeats: 3,
+                    carModel: 'هيونداي إلنترا CN7',
+                    carYear: 2023,
+                    hasAC: true,
+                    startName: 'الشيخ زايد (هايبر وان)',
+                    endName: 'التجمع الخامس (شارع التسعين)',
+                    startCoords: [30.0444, 30.9850],
+                    endCoords: [30.0074, 31.4913],
+                    routeCoords: [
+                        [30.0444, 30.9850],
+                        [30.0620, 31.0800],
+                        [30.0580, 31.1950],
+                        [30.0400, 31.3200],
+                        [30.0074, 31.4913]
+                    ],
+                    distanceKm: 54,
+                    durationMin: 62,
+                    createdAt: now,
+                    bookings: [
+                        {
+                            id: 'bk-demo-1',
+                            name: 'كريم طارق',
+                            phone: '01012345678',
+                            pickup: 'أمام هايبر وان',
+                            seats: 1,
+                            dropoffRatio: 0.5,
+                            dropoffCoords: [30.0580, 31.1950],
+                            dropoffLabel: 'منتصف الطريق (50% من المسار)'
+                        }
+                    ]
+                },
+                {
+                    id: 'trip-2',
+                    direction: 'return',
+                    driverName: 'كابتن أحمد محمود',
+                    time: '17:30',
+                    basePrice: 100,
+                    totalSeats: 3,
+                    carModel: 'هيونداي إلنترا CN7',
+                    carYear: 2023,
+                    hasAC: true,
+                    startName: 'التجمع الخامس (شارع التسعين)',
+                    endName: 'الشيخ زايد (هايبر وان)',
+                    startCoords: [30.0074, 31.4913],
+                    endCoords: [30.0444, 30.9850],
+                    routeCoords: [
+                        [30.0074, 31.4913],
+                        [30.0400, 31.3200],
+                        [30.0580, 31.1950],
+                        [30.0620, 31.0800],
+                        [30.0444, 30.9850]
+                    ],
+                    distanceKm: 54,
+                    durationMin: 65,
+                    createdAt: now - 1000,
+                    bookings: []
+                },
+                {
+                    id: 'trip-3',
+                    direction: 'go',
+                    driverName: 'كابتن سارة حسن',
+                    time: '08:30',
+                    basePrice: 70,
+                    totalSeats: 3,
+                    carModel: 'كيا سيراتو',
+                    carYear: 2022,
+                    hasAC: true,
+                    startName: 'المعادي (شارع النصر)',
+                    endName: 'القرية الذكية',
+                    startCoords: [29.9602, 31.2569],
+                    endCoords: [30.0715, 31.0169],
+                    routeCoords: [
+                        [29.9602, 31.2569],
+                        [30.0050, 31.1900],
+                        [30.0420, 31.1100],
+                        [30.0715, 31.0169]
+                    ],
+                    distanceKm: 34,
+                    durationMin: 42,
+                    createdAt: now - 2000,
+                    bookings: []
+                }
+            ];
+        }
+
+        async function seedDemoTripsToFirestore() {
+            if (!firebaseAuthUser) return;
+            const defaults = getDefaultTrips();
+            for (const trip of defaults) {
+                await setDoc(tripDocRef(trip.id), serializeTripForFirestore(trip));
+            }
+            await setDoc(metaInitDocRef(), { seeded: true, updatedAt: Date.now() });
+        }
+
+        async function initFirebaseAndSync() {
+            updateCloudBadge('connecting');
+            try {
+                firebaseApp = initializeApp(firebaseConfig);
+                db = getFirestore(firebaseApp);
+                auth = getAuth(firebaseApp);
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    const cred = await signInWithCustomToken(auth, __initial_auth_token);
+                    firebaseAuthUser = cred.user;
+                } else {
+                    const cred = await signInAnonymously(auth);
+                    firebaseAuthUser = cred.user;
+                }
+
+                isCloudReady = true;
+                updateCloudBadge('connected');
+
+                try {
+                    const sessionSnap = await getDoc(sessionDocRef());
+                    if (sessionSnap.exists()) {
+                        state.currentUser = sessionSnap.data();
+                    }
+                } catch (err) {
+                    console.warn('Could not load saved session:', err);
+                }
+
+                try {
+                    const initSnap = await getDoc(metaInitDocRef());
+                    if (!initSnap.exists()) {
+                        await seedDemoTripsToFirestore();
+                    }
+                } catch (err) {
+                    console.warn('Seed check warning:', err);
+                }
+
+                onSnapshot(
+                    tripsCollectionRef(),
+                    (snapshot) => {
+                        const loadedTrips = [];
+                        snapshot.forEach((docSnap) => {
+                            loadedTrips.push(deserializeTripFromFirestore(docSnap.data()));
+                        });
+                        loadedTrips.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                        state.trips = loadedTrips;
+                        renderAll();
+                    },
+                    (error) => {
+                        console.error('Trips sync error:', error);
+                        updateCloudBadge('error', 'خطأ صلاحيات');
+                        showToast('تعذر مزامنة الرحلات مع السحابة', 'error');
+                    }
+                );
+
+                onSnapshot(
+                    usersCollectionRef(),
+                    (snapshot) => {
+                        const loadedUsers = [];
+                        snapshot.forEach((docSnap) => {
+                            loadedUsers.push(docSnap.data());
+                        });
+                        state.users = loadedUsers;
+                        if (state.currentUser) {
+                            const refreshed = loadedUsers.find(u => u.id === state.currentUser.id);
+                            if (refreshed) {
+                                state.currentUser = refreshed;
+                            } else {
+                                // If admin deleted this user account, automatically log them out
+                                state.currentUser = null;
+                            }
+                        }
+                        renderAll();
+                        if (!document.getElementById('users-db-modal').classList.contains('hidden') && state.isAdminUnlocked) {
+                            renderUsersDatabaseList();
+                        }
+                    },
+                    (error) => {
+                        console.error('Users sync error:', error);
+                    }
+                );
+            } catch (err) {
+                console.error('Firebase init failed:', err);
+                isCloudReady = false;
+                const code = err?.code || '';
+                if (code.includes('unauthorized-domain')) {
+                    updateCloudBadge('error', 'أضف الدومين في Firebase');
+                    showToast('أضف دومين موقعك في Firebase Authorized Domains', 'error');
+                } else {
+                    updateCloudBadge('error', 'وضع محلي');
+                    showToast('تعذر الاتصال بالسحابة: ' + (err?.message || ''), 'error');
+                }
+                state.trips = getDefaultTrips();
+                renderAll();
+            }
+        }
+
+        function isMyBooking(booking) {
+            if (!booking) return false;
+            if (state.currentUser) {
+                if (booking.userId && booking.userId === state.currentUser.id) return true;
+                if (booking.phone && booking.phone === state.currentUser.phone) return true;
+            }
+            if (firebaseAuthUser && booking.authUid && booking.authUid === firebaseAuthUser.uid) {
+                return true;
+            }
+            return false;
+        }
+
+        function resetDemoDataConfirm() {
+            openConfirmModal(
+                'إعادة ضبط البيانات التجريبية',
+                'سيتم استرجاع الرحلات الافتراضية على السحابة لجميع المستخدمين، هل تريد المتابعة؟',
+                async () => {
+                    if (!firebaseAuthUser) {
+                        state.trips = getDefaultTrips();
+                        renderAll();
+                        showToast('تمت إعادة ضبط البيانات محلياً', 'success');
+                        return;
+                    }
+                    try {
+                        for (const t of state.trips) {
+                            await deleteDoc(tripDocRef(t.id));
+                        }
+                        await seedDemoTripsToFirestore();
+                        showToast('تمت إعادة ضبط الرحلات التجريبية على السحابة بنجاح', 'success');
+                    } catch (err) {
+                        console.error('Reset error:', err);
+                        showToast('حدث خطأ أثناء إعادة الضبط', 'error');
+                    }
+                }
+            );
+        }
+
+        // ==========================================================
+        // 3. SMART PRICING ENGINE
+        // ==========================================================
+        function getDistanceMultiplier(ratio) {
+            const r = Math.max(0, Math.min(1, ratio));
+            if (r <= 0.5) return 0.70;
+            if (r <= 0.8) {
+                return 0.70 + ((r - 0.5) / 0.3) * 0.20;
+            }
+            if (r <= 0.9) return 0.90;
+            return 1.00;
+        }
+
+        function getSharingMultiplier(totalOccupiedSeats) {
+            if (totalOccupiedSeats <= 1) return { mult: 1.0, discountPct: 0, label: 'السعر الأساسي (100%)' };
+            if (totalOccupiedSeats === 2) return { mult: 0.8, discountPct: 20, label: 'خصم مشاركة 20%' };
+            return { mult: 0.5, discountPct: 50, label: 'خصم مشاركة 50%' };
+        }
+
+        function calculateBookingPrice(basePrice, dropoffRatio, totalOccupiedSeats, seatsForThisBooking) {
+            const distMult = getDistanceMultiplier(dropoffRatio);
+            const distPricePerSeat = Math.round(basePrice * distMult);
+            const sharing = getSharingMultiplier(totalOccupiedSeats);
+            const finalPerSeat = Math.round(distPricePerSeat * sharing.mult);
+            const totalToPay = finalPerSeat * seatsForThisBooking;
+
+            return {
+                distPct: Math.round(distMult * 100),
+                distPricePerSeat,
+                sharingMult: sharing.mult,
+                sharingDiscountPct: sharing.discountPct,
+                sharingLabel: sharing.label,
+                finalPerSeat,
+                totalToPay
+            };
+        }
+
+        function getBookedSeatsCount(trip) {
+            return (trip.bookings || []).reduce((sum, b) => sum + (Number(b.seats) || 1), 0);
+        }
+
+        // ==========================================================
+        // 4. MODE & TAB NAVIGATION
+        // ==========================================================
+        function switchMode(mode) {
+            state.mode = mode;
+            const pView = document.getElementById('view-passenger');
+            const dView = document.getElementById('view-driver');
+            const pBtn = document.getElementById('btn-mode-passenger');
+            const dBtn = document.getElementById('btn-mode-driver');
+
+            if (mode === 'passenger') {
+                pView.classList.remove('hidden');
+                dView.classList.add('hidden');
+                pBtn.className = 'py-2 px-3 rounded-xl text-xs sm:text-sm font-extrabold transition flex items-center justify-center gap-1.5 bg-white text-emerald-700 shadow-sm';
+                dBtn.className = 'py-2 px-3 rounded-xl text-xs sm:text-sm font-extrabold transition flex items-center justify-center gap-1.5 text-slate-600 hover:text-slate-900';
+            } else {
+                pView.classList.add('hidden');
+                dView.classList.remove('hidden');
+                dBtn.className = 'py-2 px-3 rounded-xl text-xs sm:text-sm font-extrabold transition flex items-center justify-center gap-1.5 bg-white text-emerald-700 shadow-sm';
+                pBtn.className = 'py-2 px-3 rounded-xl text-xs sm:text-sm font-extrabold transition flex items-center justify-center gap-1.5 text-slate-600 hover:text-slate-900';
+
+                setTimeout(() => {
+                    initDriverMapIfNeeded();
+                    if (driverMap) driverMap.invalidateSize();
+                }, 120);
+            }
+        }
+
+        function switchPassengerTab(tab) {
+            state.passengerTab = tab;
+            const browseBtn = document.getElementById('p-tab-browse');
+            const bookingsBtn = document.getElementById('p-tab-bookings');
+            const browsePanel = document.getElementById('passenger-browse-panel');
+            const bookingsPanel = document.getElementById('passenger-bookings-panel');
+            const filters = document.getElementById('passenger-direction-filters');
+
+            if (tab === 'browse') {
+                browsePanel.classList.remove('hidden');
+                bookingsPanel.classList.add('hidden');
+                filters.classList.remove('hidden');
+                browseBtn.className = 'flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold bg-emerald-600 text-white shadow-sm transition flex items-center justify-center gap-1.5';
+                bookingsBtn.className = 'flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold bg-slate-100 text-slate-700 hover:bg-slate-200 transition flex items-center justify-center gap-1.5';
+            } else {
+                browsePanel.classList.add('hidden');
+                bookingsPanel.classList.remove('hidden');
+                filters.classList.add('hidden');
+                bookingsBtn.className = 'flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold bg-emerald-600 text-white shadow-sm transition flex items-center justify-center gap-1.5';
+                browseBtn.className = 'flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold bg-slate-100 text-slate-700 hover:bg-slate-200 transition flex items-center justify-center gap-1.5';
+            }
+        }
+
+        function switchDriverTab(tab) {
+            state.driverTab = tab;
+            const createBtn = document.getElementById('d-tab-create');
+            const tripsBtn = document.getElementById('d-tab-my-trips');
+            const createPanel = document.getElementById('driver-create-panel');
+            const tripsPanel = document.getElementById('driver-trips-panel');
+
+            if (tab === 'create') {
+                createPanel.classList.remove('hidden');
+                tripsPanel.classList.add('hidden');
+                createBtn.className = 'flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold bg-emerald-600 text-white shadow-sm transition flex items-center justify-center gap-1.5';
+                tripsBtn.className = 'flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold bg-slate-100 text-slate-700 hover:bg-slate-200 transition flex items-center justify-center gap-1.5';
+                setTimeout(() => {
+                    initDriverMapIfNeeded();
+                    if (driverMap) driverMap.invalidateSize();
+                }, 120);
+            } else {
+                createPanel.classList.add('hidden');
+                tripsPanel.classList.remove('hidden');
+                tripsBtn.className = 'flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold bg-emerald-600 text-white shadow-sm transition flex items-center justify-center gap-1.5';
+                createBtn.className = 'flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold bg-slate-100 text-slate-700 hover:bg-slate-200 transition flex items-center justify-center gap-1.5';
+            }
+        }
+
+        function setDirectionFilter(dir) {
+            state.directionFilter = dir;
+            ['all', 'go', 'return'].forEach(d => {
+                const btn = document.getElementById('filter-dir-' + d);
+                if (d === dir) {
+                    btn.className = 'flex-1 sm:flex-none px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-900 text-white transition';
+                } else {
+                    btn.className = 'flex-1 sm:flex-none px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-100 text-slate-600 hover:bg-slate-200 transition';
+                }
+            });
+            renderPassengerTrips();
+        }
+
+        // ==========================================================
+        // 5. RENDERING FUNCTIONS
+        // ==========================================================
+        function renderAll() {
+            renderHeaderUser();
+            updateUsersBadge();
+            syncUserToForms();
+            renderPassengerTrips();
+            renderMyBookings();
+            renderDriverTrips();
+            updateBadges();
+        }
+
+        function updateBadges() {
+            document.getElementById('badge-driver-trips').textContent = state.trips.length;
+            let myCount = 0;
+            state.trips.forEach(t => {
+                (t.bookings || []).forEach(b => {
+                    if (isMyBooking(b)) myCount++;
+                });
+            });
+            document.getElementById('badge-my-bookings').textContent = myCount;
+        }
+
+        function renderPassengerTrips() {
+            const container = document.getElementById('passenger-trips-list');
+            const filtered = state.trips.filter(t => state.directionFilter === 'all' || t.direction === state.directionFilter);
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-full bg-white rounded-3xl border border-slate-200 p-8 text-center space-y-2">
+                        <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 mx-auto flex items-center justify-center text-xl">
+                            <i class="fa-solid fa-car-burst"></i>
+                        </div>
+                        <p class="text-sm font-black text-slate-700">لا توجد رحلات متاحة في هذا القسم حالياً</p>
+                        <p class="text-xs font-semibold text-slate-500">يمكنك التبديل لوضع السائق لإضافة خط سير جديد</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = filtered.map(trip => {
+                const booked = getBookedSeatsCount(trip);
+                const available = Math.max(0, trip.totalSeats - booked);
+                const isFull = available === 0;
+                const dirBadge = trip.direction === 'go'
+                    ? `<span class="bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold"><i class="fa-solid fa-sun ml-1"></i>ذهاب</span>`
+                    : `<span class="bg-indigo-50 text-indigo-700 border border-indigo-200 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold"><i class="fa-solid fa-moon ml-1"></i>عودة</span>`;
+
+                const acBadge = trip.hasAC
+                    ? `<span class="bg-sky-50 text-sky-700 border border-sky-200 px-2 py-0.5 rounded-lg text-[11px] font-bold"><i class="fa-solid fa-snowflake ml-1"></i>مكيفة</span>`
+                    : `<span class="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-lg text-[11px] font-bold">بدون تكييف</span>`;
+
+                let seatsHtml = '';
+                for (let i = 0; i < trip.totalSeats; i++) {
+                    const isOccupied = i < booked;
+                    seatsHtml += `<div class="w-7 h-7 rounded-lg flex items-center justify-center text-xs ${isOccupied ? 'bg-rose-100 text-rose-600 border border-rose-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'}" title="${isOccupied ? 'كرسي محجوز' : 'كرسي متاح'}">
+                        <i class="fa-solid fa-chair"></i>
+                    </div>`;
+                }
+
+                const gmapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${trip.startCoords[0]},${trip.startCoords[1]}&destination=${trip.endCoords[0]},${trip.endCoords[1]}&travelmode=driving`;
+
+                return `
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition p-4 sm:p-5 flex flex-col justify-between gap-4">
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2">
+                                ${dirBadge}
+                                <span class="text-xs font-black text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                                    <i class="fa-regular fa-clock text-emerald-600 ml-1"></i>${formatTime12h(trip.time)}
+                                </span>
+                            </div>
+                            <div class="text-left">
+                                <span class="text-lg font-black text-emerald-700">${trip.basePrice}</span>
+                                <span class="text-[11px] font-bold text-slate-500">ج.م أساسي</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-50 rounded-2xl p-3 border border-slate-100 space-y-2">
+                            <div class="flex items-center gap-2 text-xs font-extrabold text-slate-800">
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                <span class="truncate">${escapeHtml(trip.startName)}</span>
+                            </div>
+                            <div class="flex items-center gap-2 text-xs font-extrabold text-slate-800">
+                                <span class="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0"></span>
+                                <span class="truncate">${escapeHtml(trip.endName)}</span>
+                            </div>
+                            <div class="flex items-center justify-between text-[11px] font-bold text-slate-500 pt-1 border-t border-slate-200/60">
+                                <span><i class="fa-solid fa-road ml-1"></i>${trip.distanceKm} كم • ${trip.durationMin} دقيقة</span>
+                                <a href="${gmapsUrl}" target="_blank" rel="noopener" class="text-emerald-700 hover:underline font-extrabold">
+                                    <i class="fa-solid fa-map-pin ml-0.5"></i>خرائط جوجل
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <div class="flex items-center gap-2 font-bold text-slate-700">
+                                <i class="fa-solid fa-user-tie text-slate-400"></i>
+                                <span>${escapeHtml(trip.driverName)}</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg text-[11px] font-bold">
+                                    <i class="fa-solid fa-car text-slate-400 ml-1"></i>${escapeHtml(trip.carModel)} (${trip.carYear})
+                                </span>
+                                ${acBadge}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-1">${seatsHtml}</div>
+                            <p class="text-[11px] font-extrabold ${isFull ? 'text-rose-600' : 'text-emerald-700'}">
+                                ${isFull ? 'العربية مكتملة بالكامل' : `متبقي ${available} من ${trip.totalSeats} كراسي`}
+                            </p>
+                        </div>
+
+                        <button onclick="openBookingModal('${trip.id}')" ${isFull ? 'disabled' : ''}
+                            class="px-4 py-2.5 rounded-2xl text-xs font-black transition flex items-center gap-1.5 ${isFull
+                                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-200'}">
+                            <i class="fa-solid ${isFull ? 'fa-lock' : 'fa-ticket'}"></i>
+                            <span>${isFull ? 'مكتملة' : 'احجز كرسي'}</span>
+                        </button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderMyBookings() {
+            const container = document.getElementById('my-bookings-list');
+            const items = [];
+
+            state.trips.forEach(trip => {
+                const totalOccupied = getBookedSeatsCount(trip);
+                (trip.bookings || []).forEach(b => {
+                    if (isMyBooking(b)) {
+                        items.push({ trip, booking: b, totalOccupied });
+                    }
+                });
+            });
+
+            if (items.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-full bg-white rounded-3xl border border-slate-200 p-8 text-center space-y-2">
+                        <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 mx-auto flex items-center justify-center text-xl">
+                            <i class="fa-solid fa-ticket"></i>
+                        </div>
+                        <p class="text-sm font-black text-slate-700">ليس لديك أي حجوزات حالياً</p>
+                        <p class="text-xs font-semibold text-slate-500">تصفح الرحلات المتاحة واحجز كرسيك الآن</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = items.map(({ trip, booking, totalOccupied }) => {
+                const pricing = calculateBookingPrice(trip.basePrice, booking.dropoffRatio, totalOccupied, booking.seats);
+                return `
+                <div class="bg-white rounded-3xl border border-emerald-200 shadow-sm p-4 sm:p-5 space-y-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs font-black px-2.5 py-1 rounded-full ${trip.direction === 'go' ? 'bg-amber-50 text-amber-700' : 'bg-indigo-50 text-indigo-700'}">
+                            ${trip.direction === 'go' ? 'رحلة ذهاب' : 'رحلة عودة'} • ${formatTime12h(trip.time)}
+                        </span>
+                        <span class="bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full text-xs font-black">
+                            ${booking.seats} ${booking.seats === 1 ? 'كرسي' : 'كراسي'}
+                        </span>
+                    </div>
+
+                    <div class="text-sm font-black text-slate-900">
+                        ${escapeHtml(trip.startName)} <i class="fa-solid fa-arrow-left text-emerald-600 mx-1 text-xs"></i> ${escapeHtml(trip.endName)}
+                    </div>
+
+                    <div class="bg-slate-50 rounded-2xl p-3 text-xs space-y-1.5 font-bold text-slate-700 border border-slate-100">
+                        <div><i class="fa-solid fa-user text-slate-400 ml-1.5"></i>الراكب: ${escapeHtml(booking.name)} (${escapeHtml(booking.phone)})</div>
+                        <div><i class="fa-solid fa-location-dot text-emerald-600 ml-1.5"></i>الركوب: ${escapeHtml(booking.pickup)}</div>
+                        <div><i class="fa-solid fa-location-pin text-orange-500 ml-1.5"></i>النزول: ${escapeHtml(booking.dropoffLabel)}</div>
+                        <div><i class="fa-solid fa-car text-slate-400 ml-1.5"></i>العربية: ${escapeHtml(trip.carModel)} (${trip.carYear}) — ${trip.hasAC ? 'مكيفة' : 'بدون تكييف'}</div>
+                    </div>
+
+                    <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 flex items-center justify-between">
+                        <div class="text-xs">
+                            <p class="font-extrabold text-emerald-900">المبلغ المطلوب دفعه حالياً</p>
+                            <p class="text-[11px] font-semibold text-emerald-700">المسافة ${pricing.distPct}% • ${pricing.sharingLabel} (${totalOccupied} ركاب)</p>
+                        </div>
+                        <div class="text-xl font-black text-emerald-700">${pricing.totalToPay} ج.م</div>
+                    </div>
+
+                    <button onclick="cancelBookingConfirm('${trip.id}', '${booking.id}')"
+                        class="w-full py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-extrabold text-xs transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-ban"></i>
+                        إلغاء الحجز وإتاحة الكراسي لغيري
+                    </button>
+                </div>`;
+            }).join('');
+        }
+
+        function renderDriverTrips() {
+            const container = document.getElementById('driver-trips-list');
+
+            if (state.trips.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white rounded-3xl border border-slate-200 p-8 text-center space-y-2">
+                        <p class="text-sm font-black text-slate-700">لم تقم بإضافة أي رحلات بعد</p>
+                        <button onclick="switchDriverTab('create')" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-extrabold">إضافة رحلة الآن</button>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = state.trips.map(trip => {
+                const totalOccupied = getBookedSeatsCount(trip);
+                let totalCollection = 0;
+
+                const passengersHtml = (trip.bookings || []).length === 0
+                    ? `<p class="text-xs font-semibold text-slate-400 text-center py-3">لا يوجد ركاب حاجزون في هذه الرحلة حتى الآن</p>`
+                    : trip.bookings.map(b => {
+                        const pricing = calculateBookingPrice(trip.basePrice, b.dropoffRatio, totalOccupied, b.seats);
+                        totalCollection += pricing.totalToPay;
+                        return `
+                        <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div class="space-y-1 text-xs">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-black text-slate-900">${escapeHtml(b.name)}</span>
+                                    <span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-[10px] font-black">${b.seats} ${b.seats === 1 ? 'كرسي' : 'كراسي'}</span>
+                                    <a href="tel:${escapeHtml(b.phone)}" class="text-sky-700 font-extrabold dir-ltr">${escapeHtml(b.phone)}</a>
+                                </div>
+                                <div class="text-slate-600 font-semibold">
+                                    <i class="fa-solid fa-location-dot text-emerald-600 ml-1"></i>ركوب: ${escapeHtml(b.pickup)}
+                                </div>
+                                <div class="text-orange-700 font-bold">
+                                    <i class="fa-solid fa-location-pin ml-1"></i>نزول: ${escapeHtml(b.dropoffLabel)} (نسبة ${pricing.distPct}%)
+                                </div>
+                            </div>
+                            <div class="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-200">
+                                <div class="text-left">
+                                    <div class="text-base font-black text-emerald-700">${pricing.totalToPay} ج.م</div>
+                                    <div class="text-[10px] font-bold text-slate-500">${pricing.sharingLabel}</div>
+                                </div>
+                                <button onclick="openDriverDropoffsModal('${trip.id}', '${b.id}')"
+                                    class="px-2.5 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 text-[11px] font-extrabold transition flex items-center gap-1">
+                                    <i class="fa-solid fa-map-location-dot"></i>
+                                    عرض نقطة النزول
+                                </button>
+                            </div>
+                        </div>`;
+                    }).join('');
+
+                return `
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-4">
+                    <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-black px-2.5 py-0.5 rounded-full ${trip.direction === 'go' ? 'bg-amber-50 text-amber-700' : 'bg-indigo-50 text-indigo-700'}">
+                                    ${trip.direction === 'go' ? 'ذهاب' : 'عودة'} • ${formatTime12h(trip.time)}
+                                </span>
+                                <span class="text-xs font-extrabold text-slate-600">${totalOccupied} / ${trip.totalSeats} كراسي محجوزة</span>
+                            </div>
+                            <h3 class="text-base font-black text-slate-900">
+                                ${escapeHtml(trip.startName)} <i class="fa-solid fa-arrow-left text-emerald-600 mx-1 text-xs"></i> ${escapeHtml(trip.endName)}
+                            </h3>
+                            <p class="text-[11px] font-bold text-slate-500">
+                                ${escapeHtml(trip.carModel)} (${trip.carYear}) • ${trip.hasAC ? 'تكييف متاح' : 'بدون تكييف'} • السعر الأساسي ${trip.basePrice} ج.م
+                            </p>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <button onclick="openDriverDropoffsModal('${trip.id}')"
+                                class="px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 text-xs font-extrabold transition">
+                                <i class="fa-solid fa-map-pin ml-1"></i>خريطة النزول
+                            </button>
+                            <button onclick="startEditTrip('${trip.id}')"
+                                class="px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 text-xs font-extrabold transition">
+                                <i class="fa-solid fa-pen ml-1"></i>تعديل
+                            </button>
+                            <button onclick="deleteTripConfirm('${trip.id}')"
+                                class="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-extrabold transition">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="font-extrabold text-slate-700">قائمة الركاب الحاجزين (${(trip.bookings || []).length})</span>
+                            <span class="font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                                إجمالي التحصيل: ${totalCollection} ج.م
+                            </span>
+                        </div>
+                        ${passengersHtml}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // ==========================================================
+        // 6. DRIVER FORM, MAP & EDITING LOGIC
+        // ==========================================================
+        function initQuickLocationPresets() {
+            const startBox = document.getElementById('quick-start-presets');
+            const endBox = document.getElementById('quick-end-presets');
+            if (!startBox || !endBox) return;
+
+            startBox.innerHTML = PRESET_LOCATIONS.map(loc => `
+                <button type="button" onclick="applyPresetLocation('start', '${loc.name}', ${loc.coords[0]}, ${loc.coords[1]})"
+                    class="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-200/70 transition">${loc.name}</button>
+            `).join('');
+
+            endBox.innerHTML = PRESET_LOCATIONS.map(loc => `
+                <button type="button" onclick="applyPresetLocation('end', '${loc.name}', ${loc.coords[0]}, ${loc.coords[1]})"
+                    class="px-2 py-0.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 text-[10px] font-bold border border-rose-200/70 transition">${loc.name}</button>
+            `).join('');
+        }
+
+        function applyPresetLocation(type, name, lat, lng) {
+            if (type === 'start') {
+                state.driverStartCoords = [lat, lng];
+                document.getElementById('d-start-name').value = name;
+            } else {
+                state.driverEndCoords = [lat, lng];
+                document.getElementById('d-end-name').value = name;
+            }
+            updateDriverMapRoute();
+        }
+
+        function setDriverDirection(dir) {
+            state.driverDirection = dir;
+            const goBtn = document.getElementById('d-dir-go');
+            const retBtn = document.getElementById('d-dir-return');
+            if (dir === 'go') {
+                goBtn.className = 'py-2 rounded-lg text-xs font-extrabold bg-white text-emerald-700 shadow-sm transition';
+                retBtn.className = 'py-2 rounded-lg text-xs font-extrabold text-slate-600 transition';
+            } else {
+                retBtn.className = 'py-2 rounded-lg text-xs font-extrabold bg-white text-indigo-700 shadow-sm transition';
+                goBtn.className = 'py-2 rounded-lg text-xs font-extrabold text-slate-600 transition';
+            }
+        }
+
+        function setDriverAC(hasAC) {
+            state.driverAC = hasAC;
+            const yesBtn = document.getElementById('d-ac-yes');
+            const noBtn = document.getElementById('d-ac-no');
+            if (hasAC) {
+                yesBtn.className = 'py-2 rounded-lg text-xs font-extrabold bg-sky-600 text-white shadow-sm transition';
+                noBtn.className = 'py-2 rounded-lg text-xs font-extrabold text-slate-500 transition';
+            } else {
+                noBtn.className = 'py-2 rounded-lg text-xs font-extrabold bg-slate-700 text-white shadow-sm transition';
+                yesBtn.className = 'py-2 rounded-lg text-xs font-extrabold text-slate-500 transition';
+            }
+        }
+
+        function setMapPickMode(mode) {
+            state.mapPickMode = mode;
+            const startBtn = document.getElementById('btn-pick-start');
+            const endBtn = document.getElementById('btn-pick-end');
+            if (mode === 'start') {
+                startBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold bg-emerald-600 text-white shadow-sm transition';
+                endBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-100 text-slate-700 hover:bg-slate-200 transition';
+            } else {
+                endBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold bg-rose-600 text-white shadow-sm transition';
+                startBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-100 text-slate-700 hover:bg-slate-200 transition';
+            }
+        }
+
+        function createPinIcon(color, iconClass) {
+            return L.divIcon({
+                className: '',
+                html: `<div class="custom-pin" style="width:30px;height:30px;background:${color};font-size:13px;"><i class="fa-solid ${iconClass}"></i></div>`,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            });
+        }
+
+        function initDriverMapIfNeeded() {
+            if (driverMap) return;
+            driverMap = L.map('driver-map').setView([30.0444, 31.2357], 10);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(driverMap);
+
+            driverMap.on('click', (e) => {
+                const coords = [Number(e.latlng.lat.toFixed(5)), Number(e.latlng.lng.toFixed(5))];
+                if (state.mapPickMode === 'start') {
+                    state.driverStartCoords = coords;
+                    if (!document.getElementById('d-start-name').value.trim()) {
+                        document.getElementById('d-start-name').value = `نقطة بداية (${coords[0]}, ${coords[1]})`;
+                    }
+                    setMapPickMode('end');
+                    showToast('تم تحديد نقطة البداية، اضغط الآن لتحديد النهاية', 'info');
+                } else {
+                    state.driverEndCoords = coords;
+                    if (!document.getElementById('d-end-name').value.trim()) {
+                        document.getElementById('d-end-name').value = `نقطة نهاية (${coords[0]}, ${coords[1]})`;
+                    }
+                    showToast('تم تحديد نقطة النهاية وجاري رسم المسار', 'success');
+                }
+                updateDriverMapRoute();
+            });
+
+            if (!document.getElementById('d-start-name').value) {
+                document.getElementById('d-start-name').value = 'الشيخ زايد';
+                document.getElementById('d-end-name').value = 'التجمع الخامس';
+            }
+            updateDriverMapRoute();
+        }
+
+        async function updateDriverMapRoute() {
+            if (!driverMap) return;
+            const start = state.driverStartCoords;
+            const end = state.driverEndCoords;
+
+            if (driverStartMarker) driverMap.removeLayer(driverStartMarker);
+            if (driverEndMarker) driverMap.removeLayer(driverEndMarker);
+            if (driverRouteLine) driverMap.removeLayer(driverRouteLine);
+
+            driverStartMarker = L.marker(start, { icon: createPinIcon('#059669', 'fa-play') }).addTo(driverMap);
+            driverEndMarker = L.marker(end, { icon: createPinIcon('#e11d48', 'fa-flag-checkered') }).addTo(driverMap);
+
+            const infoEl = document.getElementById('driver-route-info');
+            infoEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-emerald-600"></i> <span>جاري حساب أسهل مسار...</span>`;
+
+            try {
+                const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end[1]},${end[0]}?overview=full&geometries=geojson`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.routes && data.routes.length > 0) {
+                    const route = data.routes[0];
+                    state.driverRouteCoords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+                    state.driverDistanceKm = Math.max(1, Math.round(route.distance / 1000));
+                    state.driverDurationMin = Math.max(5, Math.round(route.duration / 60));
+                } else {
+                    throw new Error('No OSRM route');
+                }
+            } catch (err) {
+                state.driverRouteCoords = interpolateLine(start, end, 12);
+                const dist = haversineKm(start, end);
+                state.driverDistanceKm = Math.max(2, Math.round(dist * 1.25));
+                state.driverDurationMin = Math.max(10, Math.round(state.driverDistanceKm * 1.4));
+            }
+
+            driverRouteLine = L.polyline(state.driverRouteCoords, { color: '#059669', weight: 5, opacity: 0.85 }).addTo(driverMap);
+            driverMap.fitBounds(driverRouteLine.getBounds(), { padding: [30, 30] });
+
+            infoEl.innerHTML = `<i class="fa-solid fa-route text-emerald-600"></i> <span>${state.driverDistanceKm} كم • حوالي ${state.driverDurationMin} دقيقة</span>`;
+        }
+
+        function useCurrentGpsForStart() {
+            if (!navigator.geolocation) {
+                showToast('المتصفح لا يدعم تحديد الموقع (GPS)', 'error');
+                return;
+            }
+            showToast('جاري تحديد موقعك الحالي...', 'info');
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    state.driverStartCoords = [Number(pos.coords.latitude.toFixed(5)), Number(pos.coords.longitude.toFixed(5))];
+                    document.getElementById('d-start-name').value = 'موقعي الحالي (GPS)';
+                    updateDriverMapRoute();
+                    showToast('تم تحديد موقعك كنقطة بداية', 'success');
+                },
+                () => {
+                    showToast('تعذر الوصول للموقع، تأكد من تفعيل الـ GPS', 'error');
+                },
+                { enableHighAccuracy: true, timeout: 8000 }
+            );
+        }
+
+        async function handleDriverTripSubmit(e) {
+            e.preventDefault();
+
+            if (!state.currentUser) {
+                showToast('من فضلك سجل حسابك أولاً لنشر رحلة', 'info');
+                openAuthModal('register');
+                return;
+            }
+
+            if (!firebaseAuthUser) {
+                showToast('جاري الاتصال بالسحابة، حاول مرة أخرى بعد لحظة', 'error');
+                return;
+            }
+
+            const driverName = document.getElementById('d-driver-name').value.trim();
+            const time = document.getElementById('d-time').value;
+            const basePrice = Math.max(10, Number(document.getElementById('d-price').value) || 50);
+            const totalSeats = Number(document.getElementById('d-seats').value) || 3;
+            const carModel = document.getElementById('d-car-model').value.trim();
+            const carYear = Number(document.getElementById('d-car-year').value) || 2023;
+            const startName = document.getElementById('d-start-name').value.trim();
+            const endName = document.getElementById('d-end-name').value.trim();
+
+            const submitBtn = document.getElementById('driver-submit-btn');
+            submitBtn.disabled = true;
+
+            try {
+                if (state.editingTripId) {
+                    const trip = state.trips.find(t => t.id === state.editingTripId);
+                    if (!trip) return;
+                    const alreadyBooked = getBookedSeatsCount(trip);
+                    if (totalSeats < alreadyBooked) {
+                        showToast(`لا يمكن تقليل الكراسي لأقل من ${alreadyBooked} (يوجد ركاب حاجزون بالفعل)`, 'error');
+                        return;
+                    }
+                    const updatedTrip = {
+                        ...trip,
+                        direction: state.driverDirection,
+                        driverName,
+                        time,
+                        basePrice,
+                        totalSeats,
+                        carModel,
+                        carYear,
+                        hasAC: state.driverAC,
+                        startName,
+                        endName,
+                        startCoords: [...state.driverStartCoords],
+                        endCoords: [...state.driverEndCoords],
+                        routeCoords: state.driverRouteCoords.length > 1 ? [...state.driverRouteCoords] : interpolateLine(state.driverStartCoords, state.driverEndCoords, 10),
+                        distanceKm: state.driverDistanceKm,
+                        durationMin: state.driverDurationMin
+                    };
+                    await setDoc(tripDocRef(trip.id), serializeTripForFirestore(updatedTrip));
+                    cancelEditTrip();
+                    switchDriverTab('my-trips');
+                    showToast('تم حفظ تعديلات الرحلة ومزامنتها فوراً للجميع', 'success');
+                } else {
+                    const newTrip = {
+                        id: 'trip-' + Date.now(),
+                        direction: state.driverDirection,
+                        driverName,
+                        driverUserId: state.currentUser.id,
+                        driverPhone: state.currentUser.phone,
+                        time,
+                        basePrice,
+                        totalSeats,
+                        carModel,
+                        carYear,
+                        hasAC: state.driverAC,
+                        startName,
+                        endName,
+                        startCoords: [...state.driverStartCoords],
+                        endCoords: [...state.driverEndCoords],
+                        routeCoords: state.driverRouteCoords.length > 1 ? [...state.driverRouteCoords] : interpolateLine(state.driverStartCoords, state.driverEndCoords, 10),
+                        distanceKm: state.driverDistanceKm,
+                        durationMin: state.driverDurationMin,
+                        createdAt: Date.now(),
+                        bookings: []
+                    };
+                    await setDoc(tripDocRef(newTrip.id), serializeTripForFirestore(newTrip));
+                    await upgradeUserRoleIfNeeded(state.currentUser, 'driver');
+                    switchDriverTab('my-trips');
+                    showToast('تم نشر الرحلة بنجاح وظهرت الآن لجميع الركاب', 'success');
+                }
+            } catch (err) {
+                console.error('Save trip error:', err);
+                showToast('حدث خطأ أثناء حفظ الرحلة على السحابة', 'error');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        }
+
+        function startEditTrip(tripId) {
+            const trip = state.trips.find(t => t.id === tripId);
+            if (!trip) return;
+
+            state.editingTripId = trip.id;
+            setDriverDirection(trip.direction);
+            setDriverAC(trip.hasAC);
+            document.getElementById('d-driver-name').value = trip.driverName;
+            document.getElementById('d-time').value = trip.time;
+            document.getElementById('d-price').value = trip.basePrice;
+            document.getElementById('d-seats').value = String(trip.totalSeats);
+            document.getElementById('d-car-model').value = trip.carModel;
+            document.getElementById('d-car-year').value = trip.carYear;
+            document.getElementById('d-start-name').value = trip.startName;
+            document.getElementById('d-end-name').value = trip.endName;
+
+            state.driverStartCoords = [...trip.startCoords];
+            state.driverEndCoords = [...trip.endCoords];
+            state.driverRouteCoords = [...trip.routeCoords];
+
+            document.getElementById('driver-form-title').textContent = 'تعديل بيانات الرحلة';
+            document.getElementById('d-tab-create-label').textContent = 'تعديل الرحلة';
+            document.getElementById('driver-submit-btn').innerHTML = `<i class="fa-solid fa-floppy-disk"></i><span>حفظ التعديلات</span>`;
+            document.getElementById('btn-cancel-edit').classList.remove('hidden');
+
+            switchDriverTab('create');
+            setTimeout(() => {
+                initDriverMapIfNeeded();
+                updateDriverMapRoute();
+            }, 150);
+        }
+
+        function cancelEditTrip() {
+            state.editingTripId = null;
+            document.getElementById('driver-form-title').textContent = 'نشر خط سير يومي جديد';
+            document.getElementById('d-tab-create-label').textContent = 'إضافة رحلة جديدة';
+            document.getElementById('driver-submit-btn').innerHTML = `<i class="fa-solid fa-paper-plane"></i><span>نشر الرحلة الآن</span>`;
+            document.getElementById('btn-cancel-edit').classList.add('hidden');
+        }
+
+        function deleteTripConfirm(tripId) {
+            openConfirmModal(
+                'حذف الرحلة',
+                'هل أنت متأكد من حذف هذه الرحلة وإلغاء جميع الحجوزات المرتبطة بها؟',
+                async () => {
+                    if (!firebaseAuthUser) return;
+                    try {
+                        await deleteDoc(tripDocRef(tripId));
+                        showToast('تم حذف الرحلة بنجاح', 'info');
+                    } catch (err) {
+                        console.error('Delete trip error:', err);
+                        showToast('تعذر حذف الرحلة، حاول مرة أخرى', 'error');
+                    }
+                }
+            );
+        }
+
+        // ==========================================================
+        // 7. PASSENGER BOOKING MODAL & DROPOFF SELECTION
+        // ==========================================================
+        function openBookingModal(tripId) {
+            if (!state.currentUser) {
+                showToast('من فضلك سجل حسابك أولاً لحجز كرسي', 'info');
+                openAuthModal('register', () => openBookingModal(tripId));
+                return;
+            }
+
+            const trip = state.trips.find(t => t.id === tripId);
+            if (!trip) return;
+
+            const booked = getBookedSeatsCount(trip);
+            const available = Math.max(0, trip.totalSeats - booked);
+            if (available === 0) {
+                showToast('عذراً، العربية مكتملة بالفعل', 'error');
+                return;
+            }
+
+            state.selectedTripId = tripId;
+            state.selectedSeatsToBook = 1;
+            state.selectedDropoff = {
+                coords: [...trip.endCoords],
+                ratio: 1.0,
+                label: `نهاية المسار (${trip.endName})`
+            };
+
+            document.getElementById('bm-title').textContent = `${trip.startName} ← ${trip.endName}`;
+            document.getElementById('bm-subtitle').textContent = `${trip.direction === 'go' ? 'رحلة ذهاب' : 'رحلة عودة'} • التحرك ${formatTime12h(trip.time)} • السعر الأساسي ${trip.basePrice} ج.م`;
+
+            document.getElementById('bm-car-strip').innerHTML = `
+                <span><i class="fa-solid fa-user-tie text-emerald-600 ml-1"></i>${escapeHtml(trip.driverName)}</span>
+                <span class="text-slate-300">|</span>
+                <span><i class="fa-solid fa-car text-slate-500 ml-1"></i>${escapeHtml(trip.carModel)} (${trip.carYear})</span>
+                <span class="text-slate-300">|</span>
+                <span class="${trip.hasAC ? 'text-sky-700' : 'text-slate-500'}"><i class="fa-solid fa-snowflake ml-1"></i>${trip.hasAC ? 'التكييف متاح' : 'بدون تكييف'}</span>
+            `;
+
+            document.getElementById('dropoff-ratio-badge').textContent = 'نهاية الخط (100%)';
+            document.getElementById('selected-dropoff-text').innerHTML = `<i class="fa-solid fa-location-pin text-orange-500 ml-1"></i> نقطة النزول: نهاية المسار (اضغط على الخط للتغيير)`;
+
+            if (state.currentUser) {
+                document.getElementById('p-name').value = state.currentUser.name || '';
+                document.getElementById('p-phone').value = state.currentUser.phone || '';
+            }
+            document.getElementById('p-pickup').value = '';
+
+            renderDistanceTiersGuide(trip.basePrice, 1.0);
+            renderSeatCountSelector(available, booked);
+            updateBookingPricePreview();
+
+            document.getElementById('booking-modal').classList.remove('hidden');
+
+            setTimeout(() => initBookingMap(trip), 120);
+        }
+
+        function closeBookingModal() {
+            document.getElementById('booking-modal').classList.add('hidden');
+        }
+
+        function initBookingMap(trip) {
+            if (bookingMap) {
+                bookingMap.remove();
+                bookingMap = null;
+            }
+            bookingMap = L.map('booking-map').setView(trip.startCoords, 11);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(bookingMap);
+
+            const coords = trip.routeCoords && trip.routeCoords.length > 1 ? trip.routeCoords : [trip.startCoords, trip.endCoords];
+            bookingRouteLine = L.polyline(coords, { color: '#059669', weight: 6, opacity: 0.85 }).addTo(bookingMap);
+
+            L.marker(trip.startCoords, { icon: createPinIcon('#059669', 'fa-play') }).addTo(bookingMap).bindPopup('نقطة البداية');
+            L.marker(trip.endCoords, { icon: createPinIcon('#e11d48', 'fa-flag-checkered') }).addTo(bookingMap).bindPopup('نقطة النهاية');
+
+            bookingDropoffMarker = L.marker(trip.endCoords, { icon: createPinIcon('#f97316', 'fa-location-pin') }).addTo(bookingMap);
+            bookingMap.fitBounds(bookingRouteLine.getBounds(), { padding: [25, 25] });
+
+            bookingMap.on('click', (e) => {
+                const snapped = snapPointToRoute([e.latlng.lat, e.latlng.lng], coords);
+                state.selectedDropoff = {
+                    coords: snapped.coords,
+                    ratio: snapped.ratio,
+                    label: `على المسار (${Math.round(snapped.ratio * 100)}% من الطريق)`
+                };
+
+                if (bookingDropoffMarker) bookingMap.removeLayer(bookingDropoffMarker);
+                bookingDropoffMarker = L.marker(snapped.coords, { icon: createPinIcon('#f97316', 'fa-location-pin') }).addTo(bookingMap);
+
+                const pct = Math.round(snapped.ratio * 100);
+                document.getElementById('dropoff-ratio-badge').textContent = `${pct}% من الطريق`;
+                document.getElementById('selected-dropoff-text').innerHTML = `<i class="fa-solid fa-location-pin text-orange-500 ml-1"></i> تم تحديد نقطة النزول عند <strong>${pct}%</strong> من طول المسار`;
+
+                renderDistanceTiersGuide(trip.basePrice, snapped.ratio);
+                updateBookingPricePreview();
+            });
+        }
+
+        function renderDistanceTiersGuide(basePrice, currentRatio) {
+            const tiers = [
+                {
+                    id: 't1',
+                    range: 'حتى 50% من الطريق',
+                    pctLabel: '70%',
+                    priceLabel: `${Math.round(basePrice * 0.70)} ج.م`,
+                    active: currentRatio <= 0.5
+                },
+                {
+                    id: 't2',
+                    range: 'من 50% لـ 80%',
+                    pctLabel: '70% ← 90%',
+                    priceLabel: `${Math.round(basePrice * 0.70)}–${Math.round(basePrice * 0.90)} ج.م`,
+                    active: currentRatio > 0.5 && currentRatio <= 0.8
+                },
+                {
+                    id: 't3',
+                    range: 'من 80% لـ 90%',
+                    pctLabel: '90%',
+                    priceLabel: `${Math.round(basePrice * 0.90)} ج.م`,
+                    active: currentRatio > 0.8 && currentRatio <= 0.9
+                },
+                {
+                    id: 't4',
+                    range: 'أكثر من 90%',
+                    pctLabel: '100%',
+                    priceLabel: `${basePrice} ج.م`,
+                    active: currentRatio > 0.9
+                }
+            ];
+
+            document.getElementById('distance-tiers-guide').innerHTML = tiers.map(t => `
+                <div class="rounded-xl p-2 border transition ${t.active ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm' : 'bg-white text-slate-600 border-slate-200'}">
+                    <div class="text-[10px] font-bold opacity-90">${t.range}</div>
+                    <div class="text-xs font-black mt-0.5">${t.pctLabel}</div>
+                    <div class="text-[10px] font-extrabold ${t.active ? 'text-emerald-100' : 'text-emerald-700'}">${t.priceLabel}</div>
+                </div>
+            `).join('');
+        }
+
+        function renderSeatCountSelector(available, alreadyBooked) {
+            const maxSelectable = Math.min(3, available);
+            const container = document.getElementById('seat-count-selector');
+            let html = '';
+
+            for (let s = 1; s <= 3; s++) {
+                const disabled = s > maxSelectable;
+                const isSelected = state.selectedSeatsToBook === s;
+                const totalWithThis = alreadyBooked + s;
+                const sharing = getSharingMultiplier(totalWithThis);
+                const discountBadge = sharing.discountPct > 0
+                    ? `<span class="text-[10px] font-black px-1.5 py-0.5 rounded-md ${isSelected ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'}">خصم ${sharing.discountPct}%</span>`
+                    : `<span class="text-[10px] font-bold ${isSelected ? 'text-emerald-100' : 'text-slate-400'}">السعر الأساسي</span>`;
+
+                html += `
+                    <button type="button" onclick="selectSeatsToBook(${s})" ${disabled ? 'disabled' : ''}
+                        class="p-2.5 rounded-2xl border-2 transition flex flex-col items-center justify-center gap-1 ${disabled
+                            ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
+                            : isSelected
+                                ? 'bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-200'
+                                : 'bg-white border-slate-200 text-slate-800 hover:border-emerald-400'}">
+                        <span class="text-xs sm:text-sm font-black">${s} ${s === 1 ? 'كرسي' : 'كراسي'}</span>
+                        ${disabled ? '<span class="text-[10px] font-bold">غير متاح</span>' : discountBadge}
+                    </button>`;
+            }
+            container.innerHTML = html;
+        }
+
+        function selectSeatsToBook(count) {
+            const trip = state.trips.find(t => t.id === state.selectedTripId);
+            if (!trip) return;
+            const booked = getBookedSeatsCount(trip);
+            const available = Math.max(0, trip.totalSeats - booked);
+            if (count > available) return;
+
+            state.selectedSeatsToBook = count;
+            renderSeatCountSelector(available, booked);
+            updateBookingPricePreview();
+        }
+
+        function updateBookingPricePreview() {
+            const trip = state.trips.find(t => t.id === state.selectedTripId);
+            if (!trip || !state.selectedDropoff) return;
+
+            const alreadyBooked = getBookedSeatsCount(trip);
+            const totalAfterBooking = alreadyBooked + state.selectedSeatsToBook;
+            const pricing = calculateBookingPrice(trip.basePrice, state.selectedDropoff.ratio, totalAfterBooking, state.selectedSeatsToBook);
+
+            document.getElementById('booking-price-box').innerHTML = `
+                <div class="flex items-center justify-between text-xs font-bold text-slate-700">
+                    <span>سعر المسافة المختارة (${pricing.distPct}% من ${trip.basePrice} ج.م):</span>
+                    <span class="font-black text-slate-900">${pricing.distPricePerSeat} ج.م / كرسي</span>
+                </div>
+                <div class="flex items-center justify-between text-xs font-bold text-emerald-800">
+                    <span>خصم مشاركة العربية (${totalAfterBooking} ${totalAfterBooking === 1 ? 'راكب' : 'ركاب'} إجمالاً):</span>
+                    <span class="font-black bg-emerald-200/70 px-2 py-0.5 rounded-full">${pricing.sharingLabel}</span>
+                </div>
+                <div class="pt-2 border-t border-emerald-200 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-black text-emerald-900">إجمالي المطلوب دفعه (${state.selectedSeatsToBook} ${state.selectedSeatsToBook === 1 ? 'كرسي' : 'كراسي'})</p>
+                        <p class="text-[10px] font-bold text-emerald-700">${pricing.finalPerSeat} ج.م للكرسي الواحد</p>
+                    </div>
+                    <div class="text-2xl font-black text-emerald-700">${pricing.totalToPay} ج.م</div>
+                </div>
+            `;
+        }
+
+        async function handleBookingSubmit(e) {
+            e.preventDefault();
+            if (!firebaseAuthUser) {
+                showToast('جاري الاتصال بالسحابة، حاول مرة أخرى بعد لحظة', 'error');
+                return;
+            }
+
+            const trip = state.trips.find(t => t.id === state.selectedTripId);
+            if (!trip) return;
+
+            const available = trip.totalSeats - getBookedSeatsCount(trip);
+            if (state.selectedSeatsToBook > available) {
+                showToast('عذراً، عدد الكراسي المطلوب لم يعد متاحاً', 'error');
+                return;
+            }
+
+            const name = document.getElementById('p-name').value.trim();
+            const phone = document.getElementById('p-phone').value.trim();
+            const pickup = document.getElementById('p-pickup').value.trim();
+
+            const newBooking = {
+                id: 'bk-' + Date.now(),
+                userId: state.currentUser ? state.currentUser.id : null,
+                authUid: firebaseAuthUser.uid,
+                name,
+                phone,
+                pickup,
+                seats: state.selectedSeatsToBook,
+                dropoffRatio: state.selectedDropoff.ratio,
+                dropoffCoords: [...state.selectedDropoff.coords],
+                dropoffLabel: state.selectedDropoff.label,
+                createdAt: Date.now()
+            };
+
+            const updatedBookings = [...(trip.bookings || []), newBooking];
+
+            try {
+                await updateDoc(tripDocRef(trip.id), { bookings: updatedBookings });
+                if (state.currentUser) {
+                    await upgradeUserRoleIfNeeded(state.currentUser, 'passenger');
+                }
+                closeBookingModal();
+                switchPassengerTab('bookings');
+                showToast('تم تأكيد حجزك ومزامنته مع الكابتن فوراً!', 'success');
+            } catch (err) {
+                console.error('Booking error:', err);
+                showToast('تعذر حفظ الحجز، حاول مرة أخرى', 'error');
+            }
+        }
+
+        function cancelBookingConfirm(tripId, bookingId) {
+            openConfirmModal(
+                'إلغاء الحجز',
+                'هل تريد إلغاء هذا الحجز؟ ستعود الكراسي متاحة فوراً للركاب الآخرين.',
+                async () => {
+                    if (!firebaseAuthUser) return;
+                    const trip = state.trips.find(t => t.id === tripId);
+                    if (!trip) return;
+                    const updatedBookings = (trip.bookings || []).filter(b => b.id !== bookingId);
+                    try {
+                        await updateDoc(tripDocRef(trip.id), { bookings: updatedBookings });
+                        showToast('تم إلغاء الحجز وإتاحة الكراسي بنجاح', 'info');
+                    } catch (err) {
+                        console.error('Cancel booking error:', err);
+                        showToast('تعذر إلغاء الحجز، حاول مرة أخرى', 'error');
+                    }
+                }
+            );
+        }
+
+        // ==========================================================
+        // 8. DRIVER DROPOFFS MAP MODAL
+        // ==========================================================
+        function openDriverDropoffsModal(tripId, focusBookingId = null) {
+            const trip = state.trips.find(t => t.id === tripId);
+            if (!trip) return;
+
+            document.getElementById('ddm-title').textContent = `نقاط النزول — ${trip.startName} ← ${trip.endName}`;
+            const bookings = trip.bookings || [];
+            const totalOccupied = getBookedSeatsCount(trip);
+            const legendEl = document.getElementById('ddm-passengers-legend');
+
+            if (bookings.length === 0) {
+                legendEl.innerHTML = `<p class="col-span-full text-center text-xs font-bold text-slate-400 py-2">لا يوجد ركاب حاجزون في هذه الرحلة حالياً</p>`;
+            } else {
+                legendEl.innerHTML = bookings.map(b => {
+                    const pricing = calculateBookingPrice(trip.basePrice, b.dropoffRatio, totalOccupied, b.seats);
+                    const isFocused = focusBookingId === b.id;
+                    return `
+                    <div class="p-2.5 rounded-2xl border text-xs ${isFocused ? 'bg-orange-50 border-orange-300' : 'bg-slate-50 border-slate-200'}">
+                        <div class="flex items-center justify-between font-black text-slate-800">
+                            <span>${escapeHtml(b.name)} (${b.seats} ${b.seats === 1 ? 'كرسي' : 'كراسي'})</span>
+                            <span class="text-emerald-700">${pricing.totalToPay} ج.م</span>
+                        </div>
+                        <div class="text-[11px] font-semibold text-orange-700 mt-0.5">${escapeHtml(b.dropoffLabel)}</div>
+                    </div>`;
+                }).join('');
+            }
+
+            document.getElementById('driver-dropoffs-modal').classList.remove('hidden');
+
+            setTimeout(() => {
+                if (dropoffsMap) {
+                    dropoffsMap.remove();
+                    dropoffsMap = null;
+                }
+                dropoffsMap = L.map('driver-dropoffs-map').setView(trip.startCoords, 11);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap'
+                }).addTo(dropoffsMap);
+
+                const coords = trip.routeCoords && trip.routeCoords.length > 1 ? trip.routeCoords : [trip.startCoords, trip.endCoords];
+                const routeLine = L.polyline(coords, { color: '#059669', weight: 5, opacity: 0.85 }).addTo(dropoffsMap);
+
+                L.marker(trip.startCoords, { icon: createPinIcon('#059669', 'fa-play') }).addTo(dropoffsMap).bindPopup('نقطة البداية');
+                L.marker(trip.endCoords, { icon: createPinIcon('#e11d48', 'fa-flag-checkered') }).addTo(dropoffsMap).bindPopup('نقطة النهاية');
+
+                let focusedMarker = null;
+                bookings.forEach(b => {
+                    const pricing = calculateBookingPrice(trip.basePrice, b.dropoffRatio, totalOccupied, b.seats);
+                    const m = L.marker(b.dropoffCoords || trip.endCoords, { icon: createPinIcon('#f97316', 'fa-user') })
+                        .addTo(dropoffsMap)
+                        .bindPopup(`<div style="text-align:right;font-family:Cairo,sans-serif;">
+                            <strong>${escapeHtml(b.name)}</strong> (${b.seats} كرسي)<br>
+                            ركوب: ${escapeHtml(b.pickup)}<br>
+                            المطلوب: <strong style="color:#047857">${pricing.totalToPay} ج.م</strong>
+                        </div>`);
+                    if (focusBookingId === b.id) focusedMarker = m;
+                });
+
+                dropoffsMap.fitBounds(routeLine.getBounds(), { padding: [30, 30] });
+                if (focusedMarker) {
+                    focusedMarker.openPopup();
+                }
+            }, 120);
+        }
+
+        function closeDriverDropoffsModal() {
+            document.getElementById('driver-dropoffs-modal').classList.add('hidden');
+        }
+
+        // ==========================================================
+        // 9. USER ACCOUNT, EGYPTIAN PHONE VALIDATION & STRICT ID OCR
+        // ==========================================================
+        let tesseractLoadPromise = null;
+        function ensureTesseractLoaded() {
+            if (window.Tesseract) return Promise.resolve(window.Tesseract);
+            if (tesseractLoadPromise) return tesseractLoadPromise;
+
+            tesseractLoadPromise = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+                script.async = true;
+                script.onload = () => resolve(window.Tesseract);
+                script.onerror = () => {
+                    tesseractLoadPromise = null;
+                    reject(new Error('تعذر تحميل أداة قراءة البطاقة، تأكد من اتصال الإنترنت'));
+                };
+                document.head.appendChild(script);
+            });
+            return tesseractLoadPromise;
+        }
+
+        function normalizePhoneDigits(raw) {
+            const arabicIndic = '٠١٢٣٤٥٦٧٨٩';
+            return String(raw || '')
+                .replace(/[٠-٩]/g, d => String(arabicIndic.indexOf(d)))
+                .replace(/[\s\-()]/g, '');
+        }
+
+        function validateEgyptianPhone(rawPhone) {
+            const phone = normalizePhoneDigits(rawPhone);
+            if (!/^\d+$/.test(phone)) {
+                return { valid: false, phone, error: 'رقم الموبايل يجب أن يحتوي على أرقام فقط' };
+            }
+            if (phone.length !== 11) {
+                return { valid: false, phone, error: 'رقم الموبايل المصري يجب أن يتكون من 11 رقماً بالضبط' };
+            }
+            if (!/^01[0125]/.test(phone)) {
+                return { valid: false, phone, error: 'رقم الموبايل المصري يجب أن يبدأ بـ 010 أو 011 أو 012 أو 015' };
+            }
+            return { valid: true, phone, error: '' };
+        }
+
+        function renderHeaderUser() {
+            const btn = document.getElementById('header-user-btn');
+            if (!btn) return;
+
+            if (state.currentUser) {
+                const firstName = (state.currentUser.name || 'مستخدم').split(' ')[0];
+                btn.className = 'shrink-0 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition flex items-center gap-1.5 shadow-sm';
+                btn.innerHTML = `
+                    <i class="fa-solid fa-circle-check text-emerald-200"></i>
+                    <span>${escapeHtml(firstName)}</span>
+                `;
+            } else {
+                btn.className = 'shrink-0 px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-extrabold transition flex items-center gap-1.5';
+                btn.innerHTML = `
+                    <i class="fa-solid fa-user-plus"></i>
+                    <span class="hidden sm:inline">دخول / حساب جديد</span>
+                `;
+            }
+        }
+
+        function syncUserToForms() {
+            if (!state.currentUser) return;
+            const dName = document.getElementById('d-driver-name');
+            if (dName && (!dName.value.trim() || dName.value === 'كابتن أحمد محمود')) {
+                dName.value = state.currentUser.name;
+            }
+        }
+
+        function handleHeaderUserClick() {
+            if (state.currentUser) {
+                openProfileModal();
+            } else {
+                openAuthModal('register');
+            }
+        }
+
+        function openAuthModal(mode = 'register', callback = null) {
+            state.afterAuthCallback = typeof callback === 'function' ? callback : null;
+            switchAuthTab(mode);
+            hideIdVerifyStatus();
+            document.getElementById('auth-modal').classList.remove('hidden');
+        }
+
+        function closeAuthModal() {
+            document.getElementById('auth-modal').classList.add('hidden');
+            hideIdVerifyStatus();
+        }
+
+        function switchAuthTab(mode) {
+            state.authMode = mode;
+            const regTab = document.getElementById('auth-tab-register');
+            const logTab = document.getElementById('auth-tab-login');
+            const roleField = document.getElementById('auth-field-role');
+            const nameField = document.getElementById('auth-field-name');
+            const idField = document.getElementById('auth-field-id');
+            const titleEl = document.getElementById('auth-modal-title');
+            const nameInput = document.getElementById('auth-name');
+            const submitBtn = document.getElementById('auth-submit-btn');
+
+            if (mode === 'register') {
+                regTab.className = 'py-2 rounded-xl text-xs font-extrabold bg-white text-emerald-700 shadow-sm transition';
+                logTab.className = 'py-2 rounded-xl text-xs font-extrabold text-slate-600 hover:text-slate-900 transition';
+                roleField.classList.remove('hidden');
+                nameField.classList.remove('hidden');
+                idField.classList.remove('hidden');
+                nameInput.required = true;
+                titleEl.textContent = 'إنشاء حساب جديد';
+                if (submitBtn) submitBtn.innerHTML = `<i class="fa-solid fa-user-check"></i><span>إنشاء الحساب وتوثيق الهوية</span>`;
+            } else {
+                logTab.className = 'py-2 rounded-xl text-xs font-extrabold bg-white text-emerald-700 shadow-sm transition';
+                regTab.className = 'py-2 rounded-xl text-xs font-extrabold text-slate-600 hover:text-slate-900 transition';
+                roleField.classList.add('hidden');
+                nameField.classList.add('hidden');
+                idField.classList.add('hidden');
+                nameInput.required = false;
+                titleEl.textContent = 'تسجيل الدخول';
+                if (submitBtn) submitBtn.innerHTML = `<i class="fa-solid fa-right-to-bracket"></i><span>تسجيل الدخول</span>`;
+            }
+        }
+
+        function setAuthRole(role) {
+            state.authRole = role;
+            ['passenger', 'driver', 'both'].forEach(r => {
+                const btn = document.getElementById('role-btn-' + r);
+                if (!btn) return;
+                if (r === role) {
+                    btn.className = 'py-2 rounded-lg text-xs font-extrabold bg-white text-emerald-700 shadow-sm transition';
+                } else {
+                    btn.className = 'py-2 rounded-lg text-xs font-extrabold text-slate-600 hover:text-slate-900 transition';
+                }
+            });
+        }
+
+        function handleIdPhotoUpload(event) {
+            const file = event.target.files?.[0];
+            if (!file) return;
+
+            if (!file.type.startsWith('image/')) {
+                showToast('من فضلك اختر ملف صورة صحيح للبطاقة', 'error');
+                return;
+            }
+
+            hideIdVerifyStatus();
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    try {
+                        // 1. Compressed thumbnail for Firestore storage
+                        const thumbWidth = 520;
+                        const thumbScale = Math.min(1, thumbWidth / img.width);
+                        const thumbCanvas = document.createElement('canvas');
+                        thumbCanvas.width = Math.round(img.width * thumbScale);
+                        thumbCanvas.height = Math.round(img.height * thumbScale);
+                        thumbCanvas.getContext('2d').drawImage(img, 0, 0, thumbCanvas.width, thumbCanvas.height);
+                        const compressedDataUrl = thumbCanvas.toDataURL('image/jpeg', 0.75);
+                        state.pendingIdPhotoDataUrl = compressedDataUrl;
+
+                        // 2. High-resolution contrast-enhanced grayscale image for OCR
+                        const maxDim = 1500;
+                        const ocrScale = Math.min(1.5, maxDim / Math.max(img.width, img.height));
+                        const ocrCanvas = document.createElement('canvas');
+                        ocrCanvas.width = Math.round(img.width * ocrScale);
+                        ocrCanvas.height = Math.round(img.height * ocrScale);
+                        const ctx = ocrCanvas.getContext('2d');
+                        ctx.filter = 'grayscale(100%) contrast(155%) brightness(105%)';
+                        ctx.drawImage(img, 0, 0, ocrCanvas.width, ocrCanvas.height);
+                        state.pendingIdOcrImageUrl = ocrCanvas.toDataURL('image/png');
+
+                        document.getElementById('id-upload-preview').src = compressedDataUrl;
+                        document.getElementById('id-upload-placeholder').classList.add('hidden');
+                        document.getElementById('id-upload-preview-wrap').classList.remove('hidden');
+                        showToast('تم إرفاق صورة البطاقة بنجاح', 'success');
+                    } catch (err) {
+                        showToast('تعذر معالجة الصورة، جرب صورة أخرى', 'error');
+                    }
+                };
+                img.onerror = () => {
+                    showToast('تعذر قراءة الصورة المحددة، اختر صورة أخرى', 'error');
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function showIdVerifyStatus(type, message) {
+            const box = document.getElementById('id-verify-status');
+            if (!box) return;
+            box.classList.remove('hidden', 'bg-amber-50', 'text-amber-800', 'border-amber-200', 'bg-rose-50', 'text-rose-700', 'border-rose-200', 'bg-emerald-50', 'text-emerald-800', 'border-emerald-200');
+            if (type === 'loading') {
+                box.classList.add('bg-amber-50', 'text-amber-800', 'border-amber-200');
+                box.innerHTML = `<i class="fa-solid fa-spinner fa-spin ml-1.5"></i>${message}`;
+            } else if (type === 'error') {
+                box.classList.add('bg-rose-50', 'text-rose-700', 'border-rose-200');
+                box.innerHTML = `<i class="fa-solid fa-circle-xmark ml-1.5"></i>${message}`;
+            } else {
+                box.classList.add('bg-emerald-50', 'text-emerald-800', 'border-emerald-200');
+                box.innerHTML = `<i class="fa-solid fa-circle-check ml-1.5"></i>${message}`;
+            }
+        }
+
+        function hideIdVerifyStatus() {
+            const box = document.getElementById('id-verify-status');
+            if (box) box.classList.add('hidden');
+        }
+
 // =====================================================================
 // الخطوة 1: امسح الدالة القديمة verifyIdCardLocallyWithOCR بالكامل
 // وحط مكانها الكود ده (كله) في نفس المكان (القسم 9)
@@ -147,3 +2546,592 @@ async function verifyIdCardLocallyWithOCR(ocrImageUrl, onProgress, imageAspect) 
 //       showIdVerifyStatus('loading', `جاري فحص وقراءة بيانات البطاقة... (${pct}%)`);
 //   }, state.pendingIdAspect);
 // =====================================================================
+
+        async function handleAuthFormSubmit(e) {
+            e.preventDefault();
+            if (state.isVerifyingId) return;
+
+            const rawPhone = document.getElementById('auth-phone').value;
+            const phoneCheck = validateEgyptianPhone(rawPhone);
+            if (!phoneCheck.valid) {
+                showToast(phoneCheck.error, 'error');
+                return;
+            }
+            const phone = phoneCheck.phone;
+
+            let authenticatedUser = null;
+
+            if (state.authMode === 'register') {
+                const name = document.getElementById('auth-name').value.trim();
+                if (name.length < 3) {
+                    showToast('من فضلك اكتب اسمك بالكامل', 'error');
+                    return;
+                }
+                if (!state.pendingIdPhotoDataUrl || !state.pendingIdOcrImageUrl) {
+                    showToast('صورة البطاقة الشخصية مطلوبة لتوثيق الحساب', 'error');
+                    return;
+                }
+
+                const existing = state.users.find(u => u.phone === phone);
+                if (existing) {
+                    showToast('هذا الرقم مسجل بالفعل! يمكنك تسجيل الدخول به مباشرة', 'info');
+                    switchAuthTab('login');
+                    return;
+                }
+
+                const submitBtn = document.getElementById('auth-submit-btn');
+                state.isVerifyingId = true;
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>جاري قراءة بيانات البطاقة...</span>`;
+                showIdVerifyStatus('loading', 'جاري تجهيز أداة الفحص وقراءة بيانات البطاقة...');
+
+                try {
+                    const verification = await verifyIdCardLocallyWithOCR(state.pendingIdOcrImageUrl, (pct) => {
+                        showIdVerifyStatus('loading', `جاري فحص وقراءة بيانات البطاقة... (${pct}%)`);
+                    });
+
+                    if (!verification.isIdCard) {
+                        showIdVerifyStatus('error', escapeHtml(verification.reason));
+                        showToast('مرفوض: الصورة المرفقة ليست بطاقة شخصية واضحة', 'error');
+                        return;
+                    }
+
+                    showIdVerifyStatus('success', 'تم التحقق من بيانات البطاقة الشخصية بنجاح');
+                } catch (err) {
+                    console.error('OCR ID Verification Error:', err);
+                    showIdVerifyStatus('error', `تعذر فحص البطاقة (${escapeHtml(err.message)}). تأكد من الاتصال بالإنترنت وحاول مرة أخرى.`);
+                    showToast('فشل التحقق من البطاقة، لم يتم إنشاء الحساب', 'error');
+                    return;
+                } finally {
+                    state.isVerifyingId = false;
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = `<i class="fa-solid fa-user-check"></i><span>إنشاء الحساب وتوثيق الهوية</span>`;
+                }
+
+                authenticatedUser = {
+                    id: 'usr-' + Date.now(),
+                    name,
+                    phone,
+                    role: state.authRole || 'passenger',
+                    idPhoto: state.pendingIdPhotoDataUrl,
+                    verified: true,
+                    createdAt: Date.now()
+                };
+
+                if (firebaseAuthUser) {
+                    try {
+                        await setDoc(userDocRef(authenticatedUser.id), authenticatedUser);
+                    } catch (err) {
+                        console.error('Error saving user to Firestore:', err);
+                        showToast('تعذر حفظ الحساب على السحابة، تحقق من الاتصال', 'error');
+                        return;
+                    }
+                } else {
+                    state.users.push(authenticatedUser);
+                }
+            } else {
+                const existing = state.users.find(u => u.phone === phone);
+                if (!existing) {
+                    showToast('رقم الموبايل غير مسجل لدينا. أنشئ حساباً جديداً أولاً', 'error');
+                    switchAuthTab('register');
+                    return;
+                }
+                authenticatedUser = existing;
+            }
+
+            state.currentUser = authenticatedUser;
+            state.pendingIdPhotoDataUrl = '';
+            state.pendingIdOcrImageUrl = '';
+            hideIdVerifyStatus();
+
+            if (firebaseAuthUser) {
+                try {
+                    await setDoc(sessionDocRef(), authenticatedUser);
+                } catch (err) {
+                    console.warn('Could not save session to Firestore:', err);
+                }
+            }
+
+            document.getElementById('auth-form').reset();
+            document.getElementById('id-upload-placeholder').classList.remove('hidden');
+            document.getElementById('id-upload-preview-wrap').classList.add('hidden');
+
+            closeAuthModal();
+            renderAll();
+            showToast(`أهلاً بك يا ${authenticatedUser.name.split(' ')[0]}! تم تسجيل دخولك بنجاح`, 'success');
+
+            if (typeof state.afterAuthCallback === 'function') {
+                const cb = state.afterAuthCallback;
+                state.afterAuthCallback = null;
+                cb();
+            }
+        }
+
+        function openProfileModal() {
+            if (!state.currentUser) return;
+            document.getElementById('profile-avatar-letter').textContent = (state.currentUser.name || 'م').trim().charAt(0);
+            document.getElementById('profile-name').textContent = state.currentUser.name;
+            document.getElementById('profile-phone').textContent = state.currentUser.phone;
+            const idImg = document.getElementById('profile-id-image');
+            if (state.currentUser.idPhoto) {
+                idImg.src = state.currentUser.idPhoto;
+                idImg.classList.remove('hidden');
+            } else {
+                idImg.classList.add('hidden');
+            }
+            document.getElementById('profile-modal').classList.remove('hidden');
+        }
+
+        function closeProfileModal() {
+            document.getElementById('profile-modal').classList.add('hidden');
+        }
+
+        async function logoutUser() {
+            state.currentUser = null;
+            if (firebaseAuthUser) {
+                try {
+                    await deleteDoc(sessionDocRef());
+                } catch (err) {
+                    console.warn('Could not clear session doc:', err);
+                }
+            }
+            closeProfileModal();
+            renderAll();
+            showToast('تم تسجيل الخروج من الحساب', 'info');
+        }
+
+        // ==========================================================
+        // 9B. USERS DATABASE DIRECTORY (ADMIN VIEW) & CASCADE DELETE
+        // ==========================================================
+        const ADMIN_ACCESS_PIN = '0333';
+
+        function updateUsersBadge() {
+            const badge = document.getElementById('badge-total-users');
+            if (badge) badge.textContent = state.users.length;
+        }
+
+        async function upgradeUserRoleIfNeeded(user, activityType) {
+            if (!user || !firebaseAuthUser) return;
+            const currentRole = user.role || 'passenger';
+            let nextRole = currentRole;
+            if (currentRole === 'passenger' && activityType === 'driver') nextRole = 'both';
+            if (currentRole === 'driver' && activityType === 'passenger') nextRole = 'both';
+
+            if (nextRole !== currentRole) {
+                try {
+                    await updateDoc(userDocRef(user.id), { role: nextRole });
+                    state.currentUser = { ...user, role: nextRole };
+                } catch (err) {
+                    console.warn('Role update skipped:', err);
+                }
+            }
+        }
+
+        function openUsersDatabaseModal() {
+            document.getElementById('users-db-modal').classList.remove('hidden');
+            if (state.isAdminUnlocked) {
+                document.getElementById('users-db-lock-screen').classList.add('hidden');
+                document.getElementById('users-db-content').classList.remove('hidden');
+                renderUsersDatabaseList();
+            } else {
+                document.getElementById('users-db-lock-screen').classList.remove('hidden');
+                document.getElementById('users-db-content').classList.add('hidden');
+                document.getElementById('admin-pin-input').value = '';
+            }
+        }
+
+        function closeUsersDatabaseModal() {
+            document.getElementById('users-db-modal').classList.add('hidden');
+        }
+
+        function unlockUsersDatabase(e) {
+            e.preventDefault();
+            const entered = document.getElementById('admin-pin-input').value.trim();
+            if (entered === ADMIN_ACCESS_PIN) {
+                state.isAdminUnlocked = true;
+                document.getElementById('users-db-lock-screen').classList.add('hidden');
+                document.getElementById('users-db-content').classList.remove('hidden');
+                renderUsersDatabaseList();
+                showToast('تم فتح قاعدة بيانات المستخدمين بنجاح', 'success');
+            } else {
+                showToast('رمز الإدارة غير صحيح', 'error');
+            }
+        }
+
+        function setUsersRoleFilter(filter) {
+            state.usersRoleFilter = filter;
+            ['all', 'driver', 'passenger'].forEach(f => {
+                const btn = document.getElementById('ufilter-' + f);
+                if (!btn) return;
+                if (f === filter) {
+                    btn.className = 'px-3 py-2 rounded-xl text-xs font-extrabold bg-slate-900 text-white transition';
+                } else {
+                    btn.className = 'px-3 py-2 rounded-xl text-xs font-extrabold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition';
+                }
+            });
+            renderUsersDatabaseList();
+        }
+
+        function getRoleBadgeHtml(role) {
+            if (role === 'driver') {
+                return `<span class="bg-sky-50 text-sky-700 border border-sky-200 px-2 py-0.5 rounded-full text-[10px] font-black"><i class="fa-solid fa-car ml-1"></i>سائق</span>`;
+            }
+            if (role === 'both') {
+                return `<span class="bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full text-[10px] font-black"><i class="fa-solid fa-arrows-left-right ml-1"></i>سائق وراكب</span>`;
+            }
+            return `<span class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-black"><i class="fa-solid fa-user ml-1"></i>راكب</span>`;
+        }
+
+        function renderUsersDatabaseList() {
+            const searchQ = (document.getElementById('users-db-search')?.value || '').trim().toLowerCase();
+            const allUsers = [...state.users].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+            const totalCount = allUsers.length;
+            const driversCount = allUsers.filter(u => u.role === 'driver' || u.role === 'both').length;
+            const passengersCount = allUsers.filter(u => !u.role || u.role === 'passenger' || u.role === 'both').length;
+
+            document.getElementById('users-db-summary').innerHTML = `
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl p-2.5">
+                    <div class="text-lg font-black text-slate-900">${totalCount}</div>
+                    <div class="text-[11px] font-bold text-slate-500">إجمالي المسجلين</div>
+                </div>
+                <div class="bg-sky-50 border border-sky-200 rounded-2xl p-2.5">
+                    <div class="text-lg font-black text-sky-700">${driversCount}</div>
+                    <div class="text-[11px] font-bold text-sky-700">السائقين</div>
+                </div>
+                <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-2.5">
+                    <div class="text-lg font-black text-emerald-700">${passengersCount}</div>
+                    <div class="text-[11px] font-bold text-emerald-700">الركاب</div>
+                </div>
+            `;
+
+            const filtered = allUsers.filter(u => {
+                const r = u.role || 'passenger';
+                if (state.usersRoleFilter === 'driver' && r !== 'driver' && r !== 'both') return false;
+                if (state.usersRoleFilter === 'passenger' && r !== 'passenger' && r !== 'both') return false;
+                if (searchQ) {
+                    const matchName = (u.name || '').toLowerCase().includes(searchQ);
+                    const matchPhone = (u.phone || '').includes(searchQ);
+                    if (!matchName && !matchPhone) return false;
+                }
+                return true;
+            });
+
+            const grid = document.getElementById('users-db-grid');
+            if (filtered.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full bg-slate-50 border border-slate-200 rounded-2xl p-8 text-center space-y-1">
+                        <p class="text-sm font-black text-slate-700">لا يوجد مستخدمون مطابقون للبحث</p>
+                        <p class="text-xs font-semibold text-slate-500">سيظهر هنا تلقائياً كل سائق أو راكب يقوم بإنشاء حساب جديد</p>
+                    </div>`;
+                return;
+            }
+
+            grid.innerHTML = filtered.map(u => {
+                const dateStr = u.createdAt ? new Date(u.createdAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' }) : 'مسجل';
+                const waPhone = u.phone ? '2' + u.phone : '';
+                const safeName = escapeHtml(u.name || 'بدون اسم');
+                const safePhone = escapeHtml(u.phone || '');
+
+                return `
+                <div class="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between gap-3">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h4 class="text-sm font-black text-slate-900">${safeName}</h4>
+                                ${getRoleBadgeHtml(u.role)}
+                            </div>
+                            <div class="flex items-center gap-2 text-xs font-extrabold text-slate-700">
+                                <i class="fa-solid fa-phone text-emerald-600"></i>
+                                <span class="dir-ltr">${safePhone}</span>
+                            </div>
+                            <p class="text-[10px] font-bold text-slate-400">تاريخ التسجيل: ${dateStr}</p>
+                        </div>
+
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <a href="tel:${safePhone}" title="اتصال هاتفي"
+                                class="w-8 h-8 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 flex items-center justify-center text-xs transition">
+                                <i class="fa-solid fa-phone"></i>
+                            </a>
+                            <a href="https://wa.me/${waPhone}" target="_blank" rel="noopener" title="مراسلة واتساب"
+                                class="w-8 h-8 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center justify-center text-sm transition">
+                                <i class="fa-brands fa-whatsapp"></i>
+                            </a>
+                            <button type="button" onclick="deleteRegisteredUserConfirm('${u.id}', '${safeName}')" title="حذف المستخدم وحجوزاته"
+                                class="w-8 h-8 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 flex items-center justify-center text-xs transition">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    ${u.idPhoto ? `
+                    <div class="relative group cursor-pointer rounded-xl overflow-hidden border border-slate-200 bg-slate-100"
+                        onclick="openIdLightbox('${u.id}')">
+                        <img src="${u.idPhoto}" alt="بطاقة ${safeName}" class="w-full h-32 object-cover group-hover:scale-105 transition duration-300">
+                        <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                            <span class="bg-white text-slate-900 px-3 py-1 rounded-full text-[11px] font-black shadow">
+                                <i class="fa-solid fa-magnifying-glass-plus ml-1"></i>تكبير صورة البطاقة
+                            </span>
+                        </div>
+                    </div>` : `
+                    <div class="h-20 rounded-xl bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center text-xs font-bold text-slate-400">
+                        لا توجد صورة بطاقة مرفقة
+                    </div>`}
+                </div>`;
+            }).join('');
+        }
+
+        function openIdLightbox(userId) {
+            const user = state.users.find(u => u.id === userId);
+            if (!user || !user.idPhoto) return;
+            document.getElementById('id-lightbox-title').textContent = `بطاقة: ${user.name} (${user.phone})`;
+            document.getElementById('id-lightbox-img').src = user.idPhoto;
+            document.getElementById('id-lightbox-modal').classList.remove('hidden');
+        }
+
+        function closeIdLightbox() {
+            document.getElementById('id-lightbox-modal').classList.add('hidden');
+        }
+
+        function deleteRegisteredUserConfirm(userId, userName) {
+            const targetUser = state.users.find(u => u.id === userId);
+            const targetPhone = targetUser ? normalizePhoneDigits(targetUser.phone) : '';
+
+            openConfirmModal(
+                'حذف حساب مستخدم وجميع حجوزاته',
+                `هل تريد حذف حساب "${userName}" نهائياً؟ سيتم أيضاً حذف جميع حجوزاته وإتاحة الكراسي للركاب الآخرين.`,
+                async () => {
+                    if (!firebaseAuthUser) return;
+                    try {
+                        // 1. Delete user account document
+                        await deleteDoc(userDocRef(userId));
+
+                        // 2. Cascade delete all bookings & trips belonging to this user
+                        let removedBookingsCount = 0;
+                        let removedTripsCount = 0;
+
+                        for (const trip of state.trips) {
+                            const isTripOwner =
+                                (trip.driverUserId && trip.driverUserId === userId) ||
+                                (targetPhone && trip.driverPhone && normalizePhoneDigits(trip.driverPhone) === targetPhone);
+
+                            if (isTripOwner) {
+                                await deleteDoc(tripDocRef(trip.id));
+                                removedTripsCount++;
+                                continue;
+                            }
+
+                            const currentBookings = Array.isArray(trip.bookings) ? trip.bookings : [];
+                            const filteredBookings = currentBookings.filter(b => {
+                                const matchUserId = b.userId && b.userId === userId;
+                                const matchPhone = targetPhone && b.phone && normalizePhoneDigits(b.phone) === targetPhone;
+                                if (matchUserId || matchPhone) {
+                                    removedBookingsCount++;
+                                    return false;
+                                }
+                                return true;
+                            });
+
+                            if (filteredBookings.length !== currentBookings.length) {
+                                await updateDoc(tripDocRef(trip.id), { bookings: filteredBookings });
+                            }
+                        }
+
+                        if (state.currentUser && state.currentUser.id === userId) {
+                            state.currentUser = null;
+                            try {
+                                await deleteDoc(sessionDocRef());
+                            } catch (e) {}
+                        }
+
+                        showToast(`تم حذف الحساب وإلغاء ${removedBookingsCount} حجز وإتاحة الكراسي فوراً`, 'info');
+                    } catch (err) {
+                        console.error('Delete user & cascade error:', err);
+                        showToast('تعذر حذف المستخدم بالكامل، تأكد من الاتصال', 'error');
+                    }
+                }
+            );
+        }
+
+        // ==========================================================
+        // 10. GEOMETRY, CONFIRM MODAL & UI UTILITIES
+        // ==========================================================
+        function haversineKm(c1, c2) {
+            const R = 6371;
+            const dLat = (c2[0] - c1[0]) * Math.PI / 180;
+            const dLon = (c2[1] - c1[1]) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(c1[0] * Math.PI / 180) * Math.cos(c2[0] * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        function interpolateLine(start, end, steps) {
+            const pts = [];
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                pts.push([
+                    Number((start[0] + (end[0] - start[0]) * t).toFixed(5)),
+                    Number((start[1] + (end[1] - start[1]) * t).toFixed(5))
+                ]);
+            }
+            return pts;
+        }
+
+        function snapPointToRoute(clickCoords, routeCoords) {
+            if (!routeCoords || routeCoords.length < 2) {
+                return { coords: clickCoords, ratio: 1.0 };
+            }
+
+            let totalLen = 0;
+            const segLens = [];
+            for (let i = 0; i < routeCoords.length - 1; i++) {
+                const d = haversineKm(routeCoords[i], routeCoords[i + 1]);
+                segLens.push(d);
+                totalLen += d;
+            }
+            if (totalLen === 0) return { coords: routeCoords[routeCoords.length - 1], ratio: 1.0 };
+
+            let bestDist = Infinity;
+            let bestPoint = routeCoords[routeCoords.length - 1];
+            let bestCumulative = totalLen;
+            let cumulativeBefore = 0;
+
+            for (let i = 0; i < routeCoords.length - 1; i++) {
+                const A = routeCoords[i];
+                const B = routeCoords[i + 1];
+                const dx = B[0] - A[0];
+                const dy = B[1] - A[1];
+                const lenSq = dx * dx + dy * dy;
+                let t = lenSq === 0 ? 0 : ((clickCoords[0] - A[0]) * dx + (clickCoords[1] - A[1]) * dy) / lenSq;
+                t = Math.max(0, Math.min(1, t));
+                const proj = [Number((A[0] + t * dx).toFixed(5)), Number((A[1] + t * dy).toFixed(5))];
+                const dist = haversineKm(clickCoords, proj);
+
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestPoint = proj;
+                    bestCumulative = cumulativeBefore + segLens[i] * t;
+                }
+                cumulativeBefore += segLens[i];
+            }
+
+            const ratio = Math.max(0.1, Math.min(1.0, Number((bestCumulative / totalLen).toFixed(2))));
+            return { coords: bestPoint, ratio };
+        }
+
+        function formatTime12h(time24) {
+            if (!time24) return '';
+            const [hStr, mStr] = time24.split(':');
+            let h = parseInt(hStr, 10);
+            const suffix = h >= 12 ? 'م' : 'ص';
+            h = h % 12 || 12;
+            return `${h}:${mStr} ${suffix}`;
+        }
+
+        function escapeHtml(str) {
+            return String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        let confirmActionCallback = null;
+        function openConfirmModal(title, message, onOk) {
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+            confirmActionCallback = onOk;
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirm-modal').classList.add('hidden');
+            confirmActionCallback = null;
+        }
+
+        document.getElementById('confirm-ok-btn').addEventListener('click', () => {
+            if (typeof confirmActionCallback === 'function') {
+                confirmActionCallback();
+            }
+            closeConfirmModal();
+        });
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const styles = {
+                success: 'bg-emerald-900 text-white border-emerald-700',
+                error: 'bg-rose-900 text-white border-rose-700',
+                info: 'bg-slate-900 text-white border-slate-700'
+            };
+            const icons = {
+                success: 'fa-circle-check text-emerald-400',
+                error: 'fa-circle-exclamation text-rose-400',
+                info: 'fa-circle-info text-sky-400'
+            };
+            toast.className = `pointer-events-auto px-4 py-3 rounded-2xl shadow-xl border text-xs font-extrabold flex items-center gap-2.5 transition-all duration-300 ${styles[type] || styles.info}`;
+            toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info} text-sm"></i><span>${escapeHtml(message)}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(8px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3400);
+        }
+
+        // ==========================================================
+        // 11. EXPOSE FUNCTIONS TO GLOBAL WINDOW FOR INLINE HANDLERS
+        // ==========================================================
+        window.switchMode = switchMode;
+        window.switchPassengerTab = switchPassengerTab;
+        window.switchDriverTab = switchDriverTab;
+        window.setDirectionFilter = setDirectionFilter;
+        window.resetDemoDataConfirm = resetDemoDataConfirm;
+        window.applyPresetLocation = applyPresetLocation;
+        window.setDriverDirection = setDriverDirection;
+        window.setDriverAC = setDriverAC;
+        window.setMapPickMode = setMapPickMode;
+        window.useCurrentGpsForStart = useCurrentGpsForStart;
+        window.handleDriverTripSubmit = handleDriverTripSubmit;
+        window.startEditTrip = startEditTrip;
+        window.cancelEditTrip = cancelEditTrip;
+        window.deleteTripConfirm = deleteTripConfirm;
+        window.openBookingModal = openBookingModal;
+        window.closeBookingModal = closeBookingModal;
+        window.selectSeatsToBook = selectSeatsToBook;
+        window.handleBookingSubmit = handleBookingSubmit;
+        window.cancelBookingConfirm = cancelBookingConfirm;
+        window.openDriverDropoffsModal = openDriverDropoffsModal;
+        window.closeDriverDropoffsModal = closeDriverDropoffsModal;
+        window.handleHeaderUserClick = handleHeaderUserClick;
+        window.openAuthModal = openAuthModal;
+        window.closeAuthModal = closeAuthModal;
+        window.switchAuthTab = switchAuthTab;
+        window.setAuthRole = setAuthRole;
+        window.handleIdPhotoUpload = handleIdPhotoUpload;
+        window.handleAuthFormSubmit = handleAuthFormSubmit;
+        window.openProfileModal = openProfileModal;
+        window.closeProfileModal = closeProfileModal;
+        window.logoutUser = logoutUser;
+        window.openUsersDatabaseModal = openUsersDatabaseModal;
+        window.closeUsersDatabaseModal = closeUsersDatabaseModal;
+        window.unlockUsersDatabase = unlockUsersDatabase;
+        window.setUsersRoleFilter = setUsersRoleFilter;
+        window.renderUsersDatabaseList = renderUsersDatabaseList;
+        window.openIdLightbox = openIdLightbox;
+        window.closeIdLightbox = closeIdLightbox;
+        window.deleteRegisteredUserConfirm = deleteRegisteredUserConfirm;
+        window.closeConfirmModal = closeConfirmModal;
+
+        // ==========================================================
+        // 12. INITIALIZE APPLICATION ON PAGE LOAD
+        // ==========================================================
+        initQuickLocationPresets();
+        renderAll();
+        initFirebaseAndSync();
+    </script>
+</body>
+</html>
