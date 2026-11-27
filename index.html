@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>توصيلة — مشاركة المشاوير اليومية</title>
+    <title>في سكتك — مشاركة المشاوير اليومية</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -75,7 +75,7 @@
                     <i class="fa-solid fa-car-side"></i>
                 </div>
                 <div>
-                    <h1 class="text-lg sm:text-xl font-black text-slate-900 leading-none">توصيلة</h1>
+                    <h1 class="text-lg sm:text-xl font-black text-slate-900 leading-none">في سكتك</h1>
                     <div class="flex items-center gap-1.5 mt-0.5">
                         <p class="text-[11px] font-bold text-slate-500">مشاركة المشاوير اليومية بذكاء</p>
                         <span id="cloud-status-badge" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200">
@@ -481,7 +481,7 @@
         </div>
     </div>
 
-    <!-- ==================== AUTH MODAL (REGISTER / LOGIN + ID) ==================== -->
+    <!-- ==================== AUTH MODAL (REGISTER / LOGIN + PASSWORD + ID) ==================== -->
     <div id="auth-modal" class="fixed inset-0 z-[55] hidden bg-slate-900/65 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
         <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md border border-slate-200 overflow-hidden my-auto">
             <!-- Modal Header -->
@@ -492,7 +492,7 @@
                     </div>
                     <div>
                         <h3 id="auth-modal-title" class="text-base font-black text-slate-900">إنشاء حساب جديد</h3>
-                        <p id="auth-modal-subtitle" class="text-[11px] font-semibold text-slate-500">توثيق الهوية ورقم الموبايل المصري لضمان أمان الرحلات</p>
+                        <p id="auth-modal-subtitle" class="text-[11px] font-semibold text-slate-500">حساب محمي بكلمة مرور وتوثيق الهوية لضمان الأمان</p>
                     </div>
                 </div>
                 <button onclick="closeAuthModal()" class="w-8 h-8 rounded-full bg-slate-200/70 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition">
@@ -554,6 +554,21 @@
                         <p class="text-[10px] font-semibold text-slate-400 mt-1">يجب أن يتكون من 11 رقماً ويبدأ بـ 010 أو 011 أو 012 أو 015</p>
                     </div>
 
+                    <!-- Password Field (Both Register & Login) -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">كلمة المرور</label>
+                        <div class="relative">
+                            <input type="password" id="auth-password" required minlength="4"
+                                class="w-full pl-11 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 text-right"
+                                placeholder="أدخل كلمة المرور الخاصة بحسابك">
+                            <button type="button" onclick="toggleAuthPasswordVisibility()" title="إظهار / إخفاء كلمة المرور"
+                                class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-sm transition">
+                                <i id="auth-password-eye" class="fa-solid fa-eye"></i>
+                            </button>
+                        </div>
+                        <p id="auth-password-hint" class="text-[10px] font-semibold text-slate-400 mt-1">اختر كلمة مرور قوية (4 أحرف أو أرقام على الأقل) لحماية حسابك</p>
+                    </div>
+
                     <!-- National ID Photo Upload (Register only) -->
                     <div id="auth-field-id">
                         <label class="block text-xs font-bold text-slate-700 mb-1.5">صورة البطاقة الشخصية (الوجه الأمامي)</label>
@@ -564,7 +579,7 @@
                                     <i class="fa-solid fa-id-card"></i>
                                 </div>
                                 <p class="text-xs font-extrabold text-slate-700">اضغط لرفع صورة البطاقة من المعرض أو التصوير بالكاميرا</p>
-                                <p class="text-[10px] font-semibold text-slate-400">يرجى إرفاق صورة واضحة للبطاقة الشخصية (بشكل أفقي)</p>
+                                <p class="text-[10px] font-semibold text-slate-400">يرجى إرفاق صورة واضحة للبطاقة الشخصية</p>
                             </div>
                             <div id="id-upload-preview-wrap" class="hidden space-y-2">
                                 <img id="id-upload-preview" src="" alt="صورة البطاقة" class="w-full h-36 object-cover rounded-xl border border-slate-200 shadow-sm">
@@ -611,7 +626,7 @@
                         <i class="fa-solid fa-circle-check text-emerald-600"></i>
                         حالة التوثيق
                     </span>
-                    <span class="bg-emerald-600 text-white font-extrabold px-2.5 py-0.5 rounded-full text-[11px]">موثّق بالبطاقة الشخصية</span>
+                    <span class="bg-emerald-600 text-white font-extrabold px-2.5 py-0.5 rounded-full text-[11px]">موثّق ومحمي بكلمة مرور</span>
                 </div>
 
                 <div class="space-y-1.5">
@@ -713,7 +728,7 @@
     <!-- ==================== TOAST NOTIFICATION ==================== -->
     <div id="toast-container" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] flex flex-col gap-2 w-[90%] max-w-sm pointer-events-none"></div>
 
-    <!-- ==================== APPLICATION JAVASCRIPT (FIREBASE + STRICT ID OCR + CASCADE DELETE) ==================== -->
+    <!-- ==================== APPLICATION JAVASCRIPT (FIREBASE + PASSWORD + STRICT ID OCR + CASCADE DELETE) ==================== -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -784,7 +799,6 @@
             authRole: 'passenger',
             pendingIdPhotoDataUrl: '',
             pendingIdOcrImageUrl: '',
-            pendingIdAspect: 0,
             isVerifyingId: false,
             afterAuthCallback: null,
 
@@ -1031,7 +1045,6 @@
                             if (refreshed) {
                                 state.currentUser = refreshed;
                             } else {
-                                // If admin deleted this user account, automatically log them out
                                 state.currentUser = null;
                             }
                         }
@@ -2189,7 +2202,7 @@
         }
 
         // ==========================================================
-        // 9. USER ACCOUNT, EGYPTIAN PHONE VALIDATION & STRICT ID OCR
+        // 9. USER ACCOUNT, PASSWORD PROTECTION, EGYPTIAN PHONE & ID OCR
         // ==========================================================
         let tesseractLoadPromise = null;
         function ensureTesseractLoaded() {
@@ -2229,6 +2242,31 @@
                 return { valid: false, phone, error: 'رقم الموبايل المصري يجب أن يبدأ بـ 010 أو 011 أو 012 أو 015' };
             }
             return { valid: true, phone, error: '' };
+        }
+
+        async function hashPassword(password) {
+            const raw = String(password || '');
+            if (window.crypto && window.crypto.subtle) {
+                const encoder = new TextEncoder();
+                const data = encoder.encode('tawsila_salt_' + raw);
+                const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            }
+            return btoa(unescape(encodeURIComponent('tawsila_salt_' + raw)));
+        }
+
+        function toggleAuthPasswordVisibility() {
+            const input = document.getElementById('auth-password');
+            const eye = document.getElementById('auth-password-eye');
+            if (!input || !eye) return;
+            if (input.type === 'password') {
+                input.type = 'text';
+                eye.className = 'fa-solid fa-eye-slash text-emerald-600';
+            } else {
+                input.type = 'password';
+                eye.className = 'fa-solid fa-eye';
+            }
         }
 
         function renderHeaderUser() {
@@ -2288,7 +2326,11 @@
             const idField = document.getElementById('auth-field-id');
             const titleEl = document.getElementById('auth-modal-title');
             const nameInput = document.getElementById('auth-name');
+            const passwordInput = document.getElementById('auth-password');
+            const passwordHint = document.getElementById('auth-password-hint');
             const submitBtn = document.getElementById('auth-submit-btn');
+
+            if (passwordInput) passwordInput.value = '';
 
             if (mode === 'register') {
                 regTab.className = 'py-2 rounded-xl text-xs font-extrabold bg-white text-emerald-700 shadow-sm transition';
@@ -2298,6 +2340,8 @@
                 idField.classList.remove('hidden');
                 nameInput.required = true;
                 titleEl.textContent = 'إنشاء حساب جديد';
+                if (passwordInput) passwordInput.placeholder = 'أنشئ كلمة مرور لحماية حسابك';
+                if (passwordHint) passwordHint.textContent = 'اختر كلمة مرور قوية (4 أحرف أو أرقام على الأقل) لحماية حسابك';
                 if (submitBtn) submitBtn.innerHTML = `<i class="fa-solid fa-user-check"></i><span>إنشاء الحساب وتوثيق الهوية</span>`;
             } else {
                 logTab.className = 'py-2 rounded-xl text-xs font-extrabold bg-white text-emerald-700 shadow-sm transition';
@@ -2307,6 +2351,8 @@
                 idField.classList.add('hidden');
                 nameInput.required = false;
                 titleEl.textContent = 'تسجيل الدخول';
+                if (passwordInput) passwordInput.placeholder = 'أدخل كلمة المرور الخاصة بحسابك';
+                if (passwordHint) passwordHint.textContent = 'أدخل كلمة المرور المسجلة لهذا الرقم للدخول إلى حسابك';
                 if (submitBtn) submitBtn.innerHTML = `<i class="fa-solid fa-right-to-bracket"></i><span>تسجيل الدخول</span>`;
             }
         }
@@ -2340,10 +2386,6 @@
                 const img = new Image();
                 img.onload = () => {
                     try {
-                        // 0. Remember the aspect ratio (width / height) for the ID-card shape check
-                        state.pendingIdAspect = img.width / img.height;
-
-                        // 1. Compressed thumbnail for Firestore storage
                         const thumbWidth = 520;
                         const thumbScale = Math.min(1, thumbWidth / img.width);
                         const thumbCanvas = document.createElement('canvas');
@@ -2353,7 +2395,6 @@
                         const compressedDataUrl = thumbCanvas.toDataURL('image/jpeg', 0.75);
                         state.pendingIdPhotoDataUrl = compressedDataUrl;
 
-                        // 2. High-resolution contrast-enhanced grayscale image for OCR
                         const maxDim = 1500;
                         const ocrScale = Math.min(1.5, maxDim / Math.max(img.width, img.height));
                         const ocrCanvas = document.createElement('canvas');
@@ -2401,122 +2442,79 @@
             if (box) box.classList.add('hidden');
         }
 
-        // ---------- ID VERIFICATION (SCORING-BASED) ----------
-        const EGY_GOV_CODES = new Set([
-            '01','02','03','04','11','12','13','14','15','16','17','18','19',
-            '21','22','23','24','25','26','27','28','29','31','32','33','34','35','88'
-        ]);
-
-        function toWesternDigits(str) {
-            return String(str || '')
-                .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
-                .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
-        }
-
-        // Validates the structure of an Egyptian national ID: 14 digits, century, birth date, governorate code
-        function validateEgyptianNationalId(id) {
-            if (!/^[23]\d{13}$/.test(id)) return null;
-
-            const century = id[0] === '2' ? 1900 : 2000;
-            const year = century + Number(id.slice(1, 3));
-            const month = Number(id.slice(3, 5));
-            const day = Number(id.slice(5, 7));
-            const gov = id.slice(7, 9);
-
-            const birth = new Date(year, month - 1, day);
-            const validDate =
-                birth.getFullYear() === year &&
-                birth.getMonth() === month - 1 &&
-                birth.getDate() === day &&
-                birth <= new Date();
-            if (!validDate) return null;
-            if (!EGY_GOV_CODES.has(gov)) return null;
-
-            const now = new Date();
-            let age = now.getFullYear() - year;
-            if (now < new Date(now.getFullYear(), month - 1, day)) age--;
-
-            return { nationalId: id, birthDate: birth, age, gender: Number(id[12]) % 2 === 1 ? 'male' : 'female' };
-        }
-
-        function findEgyptianNationalId(text) {
-            // Allow spaces/dashes between digits because OCR sometimes splits them
-            const candidates = text.match(/[23](?:[\s.\-]?\d){13}/g) || [];
-            for (const c of candidates) {
-                const parsed = validateEgyptianNationalId(c.replace(/\D/g, ''));
-                if (parsed) return parsed;
-            }
-            return null;
-        }
-
-        async function verifyIdCardLocallyWithOCR(ocrImageUrl, onProgress, imageAspect) {
-            // Aspect ratio check: an ID card is landscape (~1.58). Selfies and portrait photos are rejected here.
-            if (typeof imageAspect === 'number' && imageAspect > 0 && (imageAspect < 1.25 || imageAspect > 2.1)) {
-                return {
-                    isIdCard: false,
-                    reason: 'شكل الصورة لا يطابق البطاقة الشخصية. صوّر البطاقة بشكل أفقي وبحيث تملأ الصورة.'
-                };
-            }
-
+        async function verifyIdCardLocallyWithOCR(ocrImageUrl, onProgress) {
             const TesseractLib = await ensureTesseractLoaded();
+
             const result = await TesseractLib.recognize(ocrImageUrl, 'ara+eng', {
                 logger: (m) => {
                     if (m.status === 'recognizing text' && typeof onProgress === 'function') {
-                        onProgress(Math.round((m.progress || 0) * 100));
+                        const pct = Math.round((m.progress || 0) * 100);
+                        onProgress(pct);
                     }
                 }
             });
 
             const rawText = result?.data?.text || '';
-            const westernText = toWesternDigits(rawText);
+            const arabicIndic = '٠١٢٣٤٥٦٧٨٩';
+            const withWesternDigits = String(rawText)
+                .replace(/[٠-٩]/g, d => String(arabicIndic.indexOf(d)));
 
-            const normalized = westernText
+            const normalizedText = withWesternDigits
                 .replace(/[أإآ]/g, 'ا')
                 .replace(/ة/g, 'ه')
                 .replace(/ى/g, 'ي')
                 .replace(/\s+/g, ' ')
                 .trim();
 
-            // ---------- Scoring ----------
-            let score = 0;
+            const officialIdPhrases = [
+                'جمهوريه مصر',
+                'مصر العربيه',
+                'بطاقه تحقيق',
+                'تحقيق الشخصيه',
+                'الرقم القومي',
+                'رخصه قياده',
+                'جواز سفر'
+            ];
 
-            // 1) A structurally valid national ID number (strongest evidence) = 3 points
-            const idInfo = findEgyptianNationalId(westernText);
-            if (idInfo) score += 3;
+            const officialIdLongWords = [
+                'جمهوريه', 'العربيه', 'بطاقه', 'تحقيق', 'الشخصيه',
+                'القومي', 'مسيحي', 'متزوجه', 'القاهره', 'الجيزه',
+                'الاسكندريه', 'الدقهليه', 'الشرقيه', 'المنوفيه',
+                'القليوبيه', 'البحيره', 'الغربيه', 'الاسماعيليه',
+                'بورسعيد', 'كفر الشيخ', 'الوادي الجديد'
+            ];
 
-            // 2) Official multi-word phrases = 2 points each (max 4)
-            const phrases = ['جمهوريه مصر', 'مصر العربيه', 'بطاقه تحقيق', 'تحقيق الشخصيه', 'الرقم القومي'];
-            const phraseHits = phrases.filter(p => normalized.includes(p)).length;
-            score += Math.min(phraseHits, 2) * 2;
+            const hasOfficialPhrase = officialIdPhrases.some(p => normalizedText.includes(p));
 
-            // 3) Single long official words = 1 point each (max 3)
-            const words = ['جمهوريه', 'العربيه', 'بطاقه', 'تحقيق', 'الشخصيه', 'القومي', 'مسلم', 'مسيحي', 'الديانه', 'الوظيفه'];
-            const wordHits = words.filter(w => normalized.includes(w)).length;
-            score += Math.min(wordHits, 3);
-
-            // 4) Factory serial (2 letters + 7 digits) = 1 point
-            const compact = westernText.replace(/[^A-Za-z0-9]/g, '');
-            if (/[A-Z]{2}\d{7}/.test(compact)) score += 1;
-
-            // Accept only with 3+ points
-            if (score < 3) {
-                return {
-                    isIdCard: false,
-                    reason: 'لم نتمكن من التعرف على بطاقة شخصية مصرية في الصورة. صوّر الوجه الأمامي للبطاقة بإضاءة جيدة ومن غير انعكاس.'
-                };
+            let matchedLongWords = 0;
+            for (const w of officialIdLongWords) {
+                if (normalizedText.includes(w)) {
+                    matchedLongWords++;
+                }
             }
 
-            // If a national ID was found, make sure the holder is 18+
-            if (idInfo && idInfo.age < 18) {
-                return { isIdCard: false, reason: 'يجب أن يكون عمرك 18 سنة أو أكثر لاستخدام التطبيق.' };
+            const compactDigits = withWesternDigits.replace(/[^\d]/g, '');
+            const hasEgyptian14DigitId = /[23]\d{13}/.test(compactDigits);
+
+            const compactAlphaNum = withWesternDigits.replace(/[^A-Za-z0-9]/g, '');
+            const hasEgyptianSerialCode = /[A-Z]{2}\d{7}/.test(compactAlphaNum);
+
+            const isValidId =
+                hasOfficialPhrase ||
+                matchedLongWords >= 2 ||
+                hasEgyptian14DigitId ||
+                hasEgyptianSerialCode;
+
+            if (!isValidId) {
+                return {
+                    isIdCard: false,
+                    reason: 'الصورة المرفقة ليست بطاقة شخصية مصرية (يرجى رفع صورة واضحة للبطاقة الشخصية وليس صورة شخصية أو صورة عادية).'
+                };
             }
 
             return {
                 isIdCard: true,
-                reason: 'تم التحقق من البطاقة الشخصية',
-                nationalId: idInfo?.nationalId || null,
-                age: idInfo?.age ?? null,
-                score
+                reason: 'تم قراءة بيانات البطاقة الشخصية بنجاح'
             };
         }
 
@@ -2531,6 +2529,13 @@
                 return;
             }
             const phone = phoneCheck.phone;
+
+            const rawPassword = document.getElementById('auth-password').value;
+            if (!rawPassword || rawPassword.length < 4) {
+                showToast('كلمة المرور يجب أن تتكون من 4 أحرف أو أرقام على الأقل', 'error');
+                return;
+            }
+            const passwordHash = await hashPassword(rawPassword);
 
             let authenticatedUser = null;
 
@@ -2547,7 +2552,7 @@
 
                 const existing = state.users.find(u => u.phone === phone);
                 if (existing) {
-                    showToast('هذا الرقم مسجل بالفعل! يمكنك تسجيل الدخول به مباشرة', 'info');
+                    showToast('هذا الرقم مسجل بالفعل! يمكنك تسجيل الدخول به باستخدام كلمة المرور', 'info');
                     switchAuthTab('login');
                     return;
                 }
@@ -2561,7 +2566,7 @@
                 try {
                     const verification = await verifyIdCardLocallyWithOCR(state.pendingIdOcrImageUrl, (pct) => {
                         showIdVerifyStatus('loading', `جاري فحص وقراءة بيانات البطاقة... (${pct}%)`);
-                    }, state.pendingIdAspect);
+                    });
 
                     if (!verification.isIdCard) {
                         showIdVerifyStatus('error', escapeHtml(verification.reason));
@@ -2585,10 +2590,10 @@
                     id: 'usr-' + Date.now(),
                     name,
                     phone,
+                    passwordHash,
                     role: state.authRole || 'passenger',
                     idPhoto: state.pendingIdPhotoDataUrl,
                     verified: true,
-                    idVersion: 2,
                     createdAt: Date.now()
                 };
 
@@ -2610,13 +2615,31 @@
                     switchAuthTab('register');
                     return;
                 }
+
+                // Verify password
+                if (existing.passwordHash) {
+                    if (existing.passwordHash !== passwordHash) {
+                        showToast('كلمة المرور غير صحيحة، تأكد منها وحاول مرة أخرى', 'error');
+                        return;
+                    }
+                } else {
+                    // Legacy account without password: set this password now for security
+                    existing.passwordHash = passwordHash;
+                    if (firebaseAuthUser) {
+                        try {
+                            await updateDoc(userDocRef(existing.id), { passwordHash });
+                        } catch (err) {
+                            console.warn('Could not migrate legacy password:', err);
+                        }
+                    }
+                }
+
                 authenticatedUser = existing;
             }
 
             state.currentUser = authenticatedUser;
             state.pendingIdPhotoDataUrl = '';
             state.pendingIdOcrImageUrl = '';
-            state.pendingIdAspect = 0;
             hideIdVerifyStatus();
 
             if (firebaseAuthUser) {
@@ -2807,9 +2830,6 @@
                 const waPhone = u.phone ? '2' + u.phone : '';
                 const safeName = escapeHtml(u.name || 'بدون اسم');
                 const safePhone = escapeHtml(u.phone || '');
-                const legacyBadge = u.idVersion === 2
-                    ? ''
-                    : `<span class="bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full text-[10px] font-black" title="تم التسجيل قبل تفعيل الفحص الصارم للبطاقة">تحقق قديم</span>`;
 
                 return `
                 <div class="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between gap-3">
@@ -2818,7 +2838,6 @@
                             <div class="flex items-center gap-2 flex-wrap">
                                 <h4 class="text-sm font-black text-slate-900">${safeName}</h4>
                                 ${getRoleBadgeHtml(u.role)}
-                                ${legacyBadge}
                             </div>
                             <div class="flex items-center gap-2 text-xs font-extrabold text-slate-700">
                                 <i class="fa-solid fa-phone text-emerald-600"></i>
@@ -2882,12 +2901,9 @@
                 async () => {
                     if (!firebaseAuthUser) return;
                     try {
-                        // 1. Delete user account document
                         await deleteDoc(userDocRef(userId));
 
-                        // 2. Cascade delete all bookings & trips belonging to this user
                         let removedBookingsCount = 0;
-                        let removedTripsCount = 0;
 
                         for (const trip of state.trips) {
                             const isTripOwner =
@@ -2896,7 +2912,6 @@
 
                             if (isTripOwner) {
                                 await deleteDoc(tripDocRef(trip.id));
-                                removedTripsCount++;
                                 continue;
                             }
 
@@ -3090,6 +3105,7 @@
         window.closeAuthModal = closeAuthModal;
         window.switchAuthTab = switchAuthTab;
         window.setAuthRole = setAuthRole;
+        window.toggleAuthPasswordVisibility = toggleAuthPasswordVisibility;
         window.handleIdPhotoUpload = handleIdPhotoUpload;
         window.handleAuthFormSubmit = handleAuthFormSubmit;
         window.openProfileModal = openProfileModal;
