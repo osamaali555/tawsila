@@ -713,7 +713,7 @@
     <!-- ==================== TOAST NOTIFICATION ==================== -->
     <div id="toast-container" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] flex flex-col gap-2 w-[90%] max-w-sm pointer-events-none"></div>
 
-    <!-- ==================== APPLICATION JAVASCRIPT (FIREBASE + ULTRA-STRICT EGYPTIAN ID OCR) ==================== -->
+    <!-- ==================== APPLICATION JAVASCRIPT (FIREBASE + STRICT ID OCR + CASCADE DELETE) ==================== -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -724,7 +724,6 @@
         // ==========================================================
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'tawsila-carpool-app';
 
-        // بيانات مشروعك على Firebase (tawsila-app-53006)
         const fallbackFirebaseConfig = {
             apiKey: "AIzaSyApO-7UTu3esaHI-NTqcJIM7XCYAcDMdf4",
             authDomain: "tawsila-app-53006.firebaseapp.com",
@@ -1028,10 +1027,14 @@
                         state.users = loadedUsers;
                         if (state.currentUser) {
                             const refreshed = loadedUsers.find(u => u.id === state.currentUser.id);
-                            if (refreshed) state.currentUser = refreshed;
+                            if (refreshed) {
+                                state.currentUser = refreshed;
+                            } else {
+                                // If admin deleted this user account, automatically log them out
+                                state.currentUser = null;
+                            }
                         }
-                        renderHeaderUser();
-                        updateUsersBadge();
+                        renderAll();
                         if (!document.getElementById('users-db-modal').classList.contains('hidden') && state.isAdminUnlocked) {
                             renderUsersDatabaseList();
                         }
@@ -1748,6 +1751,7 @@
                         direction: state.driverDirection,
                         driverName,
                         driverUserId: state.currentUser.id,
+                        driverPhone: state.currentUser.phone,
                         time,
                         basePrice,
                         totalSeats,
@@ -2184,7 +2188,7 @@
         }
 
         // ==========================================================
-        // 9. USER ACCOUNT, EGYPTIAN PHONE VALIDATION & ULTRA-STRICT ID OCR
+        // 9. USER ACCOUNT, EGYPTIAN PHONE VALIDATION & STRICT ID OCR
         // ==========================================================
         let tesseractLoadPromise = null;
         function ensureTesseractLoaded() {
@@ -2417,43 +2421,53 @@
                 .replace(/\s+/g, ' ')
                 .trim();
 
-            // Multi-character official Egyptian ID words (minimum 4+ chars to prevent random 3-letter noise from selfie backgrounds)
-            const officialIdKeywords = [
-                'جمهوريه', 'العربيه', 'بطاقه', 'تحقيق', 'الشخصيه',
-                'الرقم', 'القومي', 'انثي', 'مسلم', 'مسيحي',
-                'اعزب', 'متزوج', 'متزوجه', 'القاهره', 'الجيزه', 'الاسكندريه',
-                'الدقهليه', 'الشرقيه', 'المنوفيه', 'القليوبيه', 'البحيره', 'الغربيه',
-                'اسيوط', 'سوهاج', 'اسوان', 'الاقصر', 'المنيا', 'بني سويف',
-                'الفيوم', 'السويس', 'الاسماعيليه', 'بورسعيد', 'دمياط', 'كفر الشيخ',
-                'مطروح', 'سيناء', 'البحر الاحمر', 'الوادي الجديد', 'مركز',
-                'ساريه', 'اصدار', 'رخصه', 'قياده', 'جواز', 'سفر'
+            // Multi-word official Egyptian ID phrases (impossible to appear in a selfie background)
+            const officialIdPhrases = [
+                'جمهوريه مصر',
+                'مصر العربيه',
+                'بطاقه تحقيق',
+                'تحقيق الشخصيه',
+                'الرقم القومي',
+                'رخصه قياده',
+                'جواز سفر'
             ];
 
-            let matchedKeywords = 0;
-            for (const kw of officialIdKeywords) {
-                if (normalizedText.includes(kw)) {
-                    matchedKeywords++;
+            // Distinct official Egyptian ID words (minimum 5+ characters to avoid OCR noise)
+            const officialIdLongWords = [
+                'جمهوريه', 'العربيه', 'بطاقه', 'تحقيق', 'الشخصيه',
+                'القومي', 'مسيحي', 'متزوجه', 'القاهره', 'الجيزه',
+                'الاسكندريه', 'الدقهليه', 'الشرقيه', 'المنوفيه',
+                'القليوبيه', 'البحيره', 'الغربيه', 'الاسماعيليه',
+                'بورسعيد', 'كفر الشيخ', 'الوادي الجديد'
+            ];
+
+            const hasOfficialPhrase = officialIdPhrases.some(p => normalizedText.includes(p));
+
+            let matchedLongWords = 0;
+            for (const w of officialIdLongWords) {
+                if (normalizedText.includes(w)) {
+                    matchedLongWords++;
                 }
             }
 
-            // 2. Egyptian National ID Number (14 digits starting with 2 or 3)
+            // Egyptian National ID Number: 14 consecutive digits starting with 2 or 3
             const compactDigits = withWesternDigits.replace(/[^\d]/g, '');
             const hasEgyptian14DigitId = /[23]\d{13}/.test(compactDigits);
 
-            // 3. Egyptian ID bottom-left factory serial number (2 letters + 7 digits, e.g. JM2015559)
+            // Egyptian ID bottom-left factory serial number: 2 uppercase letters + 7 digits (e.g., JM2015559)
             const compactAlphaNum = withWesternDigits.replace(/[^A-Za-z0-9]/g, '');
-            const hasEgyptianSerialCode = /[A-Za-z]{2}\d{7}/.test(compactAlphaNum);
+            const hasEgyptianSerialCode = /[A-Z]{2}\d{7}/.test(compactAlphaNum);
 
-            // Require EITHER at least 2 distinct official ID words OR the 14-digit National ID OR the factory serial code
             const isValidId =
-                matchedKeywords >= 2 ||
+                hasOfficialPhrase ||
+                matchedLongWords >= 2 ||
                 hasEgyptian14DigitId ||
                 hasEgyptianSerialCode;
 
             if (!isValidId) {
                 return {
                     isIdCard: false,
-                    reason: 'الصورة المرفقة لا تحتوي على بيانات بطاقة شخصية مصرية مقروءة (يرجى رفع صورة واضحة للبطاقة الشخصية وليس صورة شخصية).'
+                    reason: 'الصورة المرفقة ليست بطاقة شخصية مصرية (يرجى رفع صورة واضحة للبطاقة الشخصية وليس صورة شخصية أو صورة عادية).'
                 };
             }
 
@@ -2617,7 +2631,7 @@
         }
 
         // ==========================================================
-        // 9B. USERS DATABASE DIRECTORY (ADMIN VIEW) & ROLE SYNC
+        // 9B. USERS DATABASE DIRECTORY (ADMIN VIEW) & CASCADE DELETE
         // ==========================================================
         const ADMIN_ACCESS_PIN = '0333';
 
@@ -2773,7 +2787,7 @@
                                 class="w-8 h-8 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center justify-center text-sm transition">
                                 <i class="fa-brands fa-whatsapp"></i>
                             </a>
-                            <button type="button" onclick="deleteRegisteredUserConfirm('${u.id}', '${safeName}')" title="حذف المستخدم"
+                            <button type="button" onclick="deleteRegisteredUserConfirm('${u.id}', '${safeName}')" title="حذف المستخدم وحجوزاته"
                                 class="w-8 h-8 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 flex items-center justify-center text-xs transition">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
@@ -2810,17 +2824,60 @@
         }
 
         function deleteRegisteredUserConfirm(userId, userName) {
+            const targetUser = state.users.find(u => u.id === userId);
+            const targetPhone = targetUser ? normalizePhoneDigits(targetUser.phone) : '';
+
             openConfirmModal(
-                'حذف حساب مستخدم',
-                `هل تريد حذف حساب "${userName}" نهائياً من قاعدة البيانات؟`,
+                'حذف حساب مستخدم وجميع حجوزاته',
+                `هل تريد حذف حساب "${userName}" نهائياً؟ سيتم أيضاً حذف جميع حجوزاته وإتاحة الكراسي للركاب الآخرين.`,
                 async () => {
                     if (!firebaseAuthUser) return;
                     try {
+                        // 1. Delete user account document
                         await deleteDoc(userDocRef(userId));
-                        showToast('تم حذف المستخدم بنجاح', 'info');
+
+                        // 2. Cascade delete all bookings & trips belonging to this user
+                        let removedBookingsCount = 0;
+                        let removedTripsCount = 0;
+
+                        for (const trip of state.trips) {
+                            const isTripOwner =
+                                (trip.driverUserId && trip.driverUserId === userId) ||
+                                (targetPhone && trip.driverPhone && normalizePhoneDigits(trip.driverPhone) === targetPhone);
+
+                            if (isTripOwner) {
+                                await deleteDoc(tripDocRef(trip.id));
+                                removedTripsCount++;
+                                continue;
+                            }
+
+                            const currentBookings = Array.isArray(trip.bookings) ? trip.bookings : [];
+                            const filteredBookings = currentBookings.filter(b => {
+                                const matchUserId = b.userId && b.userId === userId;
+                                const matchPhone = targetPhone && b.phone && normalizePhoneDigits(b.phone) === targetPhone;
+                                if (matchUserId || matchPhone) {
+                                    removedBookingsCount++;
+                                    return false;
+                                }
+                                return true;
+                            });
+
+                            if (filteredBookings.length !== currentBookings.length) {
+                                await updateDoc(tripDocRef(trip.id), { bookings: filteredBookings });
+                            }
+                        }
+
+                        if (state.currentUser && state.currentUser.id === userId) {
+                            state.currentUser = null;
+                            try {
+                                await deleteDoc(sessionDocRef());
+                            } catch (e) {}
+                        }
+
+                        showToast(`تم حذف الحساب وإلغاء ${removedBookingsCount} حجز وإتاحة الكراسي فوراً`, 'info');
                     } catch (err) {
-                        console.error('Delete user error:', err);
-                        showToast('تعذر حذف المستخدم (تأكد من صلاحيات Firestore Rules)', 'error');
+                        console.error('Delete user & cascade error:', err);
+                        showToast('تعذر حذف المستخدم بالكامل، تأكد من الاتصال', 'error');
                     }
                 }
             );
